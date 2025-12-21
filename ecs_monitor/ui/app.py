@@ -4,6 +4,7 @@ import logging
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.command import Hit, Hits, Provider
 from textual.containers import Container, Vertical
 from textual.reactive import reactive
 from textual.widgets import Footer
@@ -22,16 +23,37 @@ from ecs_monitor.ui.console_link import (
     build_task_url,
     copy_to_clipboard,
 )
+from ecs_monitor.ui.debug_console import DebugConsole, TextualLogHandler
 from ecs_monitor.ui.service_view import ServiceList, ServiceSelected
 from ecs_monitor.ui.task_view import ServiceDetailView, TaskViewBack
 
 logger = logging.getLogger(__name__)
 
 
+class ToggleDebugConsoleCommand(Provider):
+    """Command provider for toggling debug console."""
+
+    async def search(self, query: str) -> Hits:
+        """Search for toggle debug console command."""
+        matcher = self.matcher(query)
+
+        command = "Toggle Debug Console"
+        score = matcher.match(command)
+        if score > 0:
+            yield Hit(
+                score,
+                matcher.highlight(command),
+                self.app.action_toggle_debug_console,
+                help="Show/hide the debug console",
+            )
+
+
 class ECSMonitorApp(App):
     """Main ECS Monitor application."""
 
     CSS_PATH = "styles.css"
+
+    COMMANDS = {ToggleDebugConsoleCommand}
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
@@ -45,6 +67,7 @@ class ECSMonitorApp(App):
     selected_service: reactive[Service | None] = reactive(None)
     loading: reactive[bool] = reactive(True)
     insights_enabled: reactive[bool] = reactive(False)
+    debug_console_visible: reactive[bool] = reactive(False)
 
     def __init__(
         self,
@@ -95,10 +118,28 @@ class ECSMonitorApp(App):
             Container(id="main-content"),
             id="main-container",
         )
+        yield DebugConsole(id="debug-console")
         yield Footer()
 
     def on_mount(self) -> None:
         """Set up the application when mounted."""
+        # Set up debug console logging handler
+        debug_console = self.query_one("#debug-console", DebugConsole)
+        handler = TextualLogHandler(debug_console)
+
+        # Always capture INFO and above for the debug console
+        # This ensures useful logs are visible when the console is toggled on
+        handler.setLevel(logging.INFO)
+
+        # Add handler to root logger
+        root_logger = logging.getLogger()
+        root_logger.addHandler(handler)
+
+        # Ensure root logger level allows INFO messages through
+        # (handlers can't receive messages filtered by the logger level)
+        if root_logger.level > logging.INFO:
+            root_logger.setLevel(logging.INFO)
+
         # Hide main container initially, show loading
         self.query_one("#main-container").display = False
         self.query_one("#loading").display = True
@@ -147,9 +188,8 @@ class ECSMonitorApp(App):
             # Fetch ECS data
             cluster = self.ecs_fetcher.fetch_cluster_state()
 
-            # Fetch metrics if insights enabled
-            if self.insights_enabled:
-                self.metrics_fetcher.fetch_metrics_for_cluster(cluster)
+            # Fetch metrics (service metrics always, container metrics if insights enabled)
+            self.metrics_fetcher.fetch_metrics_for_cluster(cluster)
 
             cluster.insights_enabled = self.insights_enabled
 
@@ -207,8 +247,11 @@ class ECSMonitorApp(App):
         self.selected_service = None
         content = self.query_one("#main-content", Container)
         content.remove_children()
-        content.mount(ServiceList(id="service-list"))
-        self._update_service_list()
+        service_list = ServiceList(id="service-list")
+        content.mount(service_list)
+        # Immediately populate if we have cluster data
+        if self.cluster:
+            service_list.services = self.cluster.services
 
     def _show_service_detail(self, service: Service) -> None:
         """Show the service detail view.
@@ -320,3 +363,15 @@ class ECSMonitorApp(App):
                 self.notify("Console URL copied to clipboard")
             else:
                 self.notify(f"URL: {url}", severity="warning")
+
+    def action_toggle_debug_console(self) -> None:
+        """Toggle the debug console visibility."""
+        self.debug_console_visible = not self.debug_console_visible
+
+    def watch_debug_console_visible(self, visible: bool) -> None:
+        """Update debug console visibility when state changes."""
+        console = self.query_one("#debug-console", DebugConsole)
+        if visible:
+            console.add_class("visible")
+        else:
+            console.remove_class("visible")

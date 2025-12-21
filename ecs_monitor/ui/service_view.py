@@ -1,5 +1,7 @@
 """Service list widget for ECS Monitor."""
 
+import logging
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.message import Message
@@ -7,6 +9,8 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Static
 
 from ecs_monitor.models import Service, HealthStatus
+
+logger = logging.getLogger(__name__)
 
 
 class ServiceSelected(Message):
@@ -26,6 +30,7 @@ class ServiceList(Static):
     ]
 
     services: reactive[list[Service]] = reactive(list, always_update=True)
+    _columns_ready: bool = False  # Track if columns have been set up
 
     def compose(self) -> ComposeResult:
         """Compose the service list layout."""
@@ -43,7 +48,19 @@ class ServiceList(Static):
         table.add_column("STATUS", width=10)
         table.add_column("TASKS", width=8)
         table.add_column("HEALTH", width=10)
+        table.add_column("CPU", width=14)
+        table.add_column("MEM", width=16)
         table.add_column("DEPLOYMENT", width=16)
+
+        # Mark columns as ready
+        self._columns_ready = True
+
+        # Focus the table so it's immediately interactive
+        table.focus()
+
+        # Now that columns are set up, update the table
+        # This handles the case where services were set before mount completed
+        self._update_table()
 
     def watch_services(self, services: list[Service]) -> None:
         """Update table when services change."""
@@ -51,7 +68,17 @@ class ServiceList(Static):
 
     def _update_table(self) -> None:
         """Update the services table with current data."""
-        table = self.query_one("#services-table", DataTable)
+        # Check if columns have been set up (happens in on_mount)
+        if not self._columns_ready:
+            logger.debug("ServiceList._update_table: columns not ready yet, skipping")
+            return
+
+        try:
+            table = self.query_one("#services-table", DataTable)
+        except Exception:
+            logger.debug("ServiceList._update_table: table not found, skipping")
+            return
+
         table.clear()
 
         for service in self.services:
@@ -79,6 +106,8 @@ class ServiceList(Static):
                 status_styled,
                 service.tasks_display,
                 health_styled,
+                service.cpu_display,
+                service.memory_display,
                 service.deployment_status,
                 key=service.name,
             )

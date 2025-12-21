@@ -140,3 +140,22 @@ Horizontal {
 #main-content {
     height: 1fr;
 }
+
+/* Debug console */
+#debug-console {
+    dock: bottom;
+    height: 12;
+    display: none;
+    background: $panel;
+    border-top: solid $primary;
+}
+
+#debug-console.visible {
+    display: block;
+}
+
+#debug-log {
+    height: 1fr;
+    background: $surface;
+    scrollbar-gutter: stable;
+}

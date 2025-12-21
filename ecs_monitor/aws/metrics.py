@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from ecs_monitor.aws.client import AWSClients
-from ecs_monitor.models import Cluster, Task, Container
+from ecs_monitor.models import Cluster, Service, Task, Container
 from ecs_monitor.utils.ids import sanitize_metric_id
 
 logger = logging.getLogger(__name__)
@@ -79,17 +79,57 @@ class MetricsFetcher:
         return self._insights_enabled
 
     def fetch_metrics_for_cluster(self, cluster: Cluster) -> None:
-        """Fetch and attach metrics to all containers in the cluster.
+        """Fetch and attach metrics to all services and containers in the cluster.
 
-        Modifies containers in-place to add cpu_used and memory_used.
+        Modifies services and containers in-place to add cpu_used and memory_used.
 
         Args:
             cluster: Cluster object with services and tasks populated
         """
-        if not self.insights_enabled:
-            logger.info("Container Insights not enabled, skipping metrics fetch")
+        # Always fetch service-level metrics (doesn't require Container Insights)
+        self._fetch_service_metrics(cluster)
+
+        # Only fetch container-level metrics if Container Insights is enabled
+        if self.insights_enabled:
+            self._fetch_container_metrics(cluster)
+        else:
+            logger.info("Container Insights not enabled, skipping container metrics")
+
+    def _fetch_service_metrics(self, cluster: Cluster) -> None:
+        """Fetch service-level CPU and memory utilization metrics.
+
+        Uses AWS/ECS namespace metrics which are always available.
+
+        Args:
+            cluster: Cluster object with services populated
+        """
+        if not cluster.services:
             return
 
+        self._report_progress(
+            f"Fetching metrics for {len(cluster.services)} services..."
+        )
+
+        # Build metric queries for services
+        metric_queries = self._build_service_metric_queries(
+            cluster.name, cluster.services
+        )
+
+        if not metric_queries:
+            return
+
+        # Fetch metrics in batches
+        all_results = self._fetch_metrics_batched(metric_queries)
+
+        # Attach results to services
+        self._attach_metrics_to_services(cluster.services, all_results)
+
+    def _fetch_container_metrics(self, cluster: Cluster) -> None:
+        """Fetch container-level metrics from Container Insights.
+
+        Args:
+            cluster: Cluster object with services and tasks populated
+        """
         # Collect all containers that need metrics
         containers_to_fetch: list[tuple[Task, Container]] = []
         for service in cluster.services:
@@ -107,7 +147,9 @@ class MetricsFetcher:
         )
 
         # Build metric queries
-        metric_queries = self._build_metric_queries(cluster.name, containers_to_fetch)
+        metric_queries = self._build_container_metric_queries(
+            cluster.name, containers_to_fetch
+        )
 
         if not metric_queries:
             return
@@ -118,12 +160,77 @@ class MetricsFetcher:
         # Parse and attach results to containers
         self._attach_metrics_to_containers(containers_to_fetch, all_results)
 
-    def _build_metric_queries(
+    def _build_service_metric_queries(
+        self,
+        cluster_name: str,
+        services: list[Service],
+    ) -> list[dict[str, Any]]:
+        """Build GetMetricData queries for service-level metrics.
+
+        Uses AWS/ECS namespace which is always available (no Container Insights needed).
+
+        Args:
+            cluster_name: Name of the ECS cluster
+            services: List of Service objects
+
+        Returns:
+            List of metric query dictionaries
+        """
+        queries = []
+
+        for service in services:
+            # CPU utilization metric
+            cpu_id = sanitize_metric_id(f"svc_cpu_{service.name}")
+            queries.append(
+                {
+                    "Id": cpu_id,
+                    "MetricStat": {
+                        "Metric": {
+                            "Namespace": "AWS/ECS",
+                            "MetricName": "CPUUtilization",
+                            "Dimensions": [
+                                {"Name": "ClusterName", "Value": cluster_name},
+                                {"Name": "ServiceName", "Value": service.name},
+                            ],
+                        },
+                        "Period": 60,
+                        "Stat": "Average",
+                    },
+                    "ReturnData": True,
+                }
+            )
+
+            # Memory utilization metric
+            mem_id = sanitize_metric_id(f"svc_mem_{service.name}")
+            queries.append(
+                {
+                    "Id": mem_id,
+                    "MetricStat": {
+                        "Metric": {
+                            "Namespace": "AWS/ECS",
+                            "MetricName": "MemoryUtilization",
+                            "Dimensions": [
+                                {"Name": "ClusterName", "Value": cluster_name},
+                                {"Name": "ServiceName", "Value": service.name},
+                            ],
+                        },
+                        "Period": 60,
+                        "Stat": "Average",
+                    },
+                    "ReturnData": True,
+                }
+            )
+
+        return queries
+
+    def _build_container_metric_queries(
         self,
         cluster_name: str,
         containers: list[tuple[Task, Container]],
     ) -> list[dict[str, Any]]:
-        """Build GetMetricData queries for all containers.
+        """Build GetMetricData queries for container-level metrics.
+
+        Uses ECS/ContainerInsights namespace (requires Container Insights).
 
         Args:
             cluster_name: Name of the ECS cluster
@@ -224,6 +331,28 @@ class MetricsFetcher:
                     results[query["Id"]] = None
 
         return results
+
+    def _attach_metrics_to_services(
+        self,
+        services: list[Service],
+        metrics: dict[str, float | None],
+    ) -> None:
+        """Attach fetched metrics to service objects.
+
+        Args:
+            services: List of Service objects
+            metrics: Dict mapping metric ID to value
+        """
+        for service in services:
+            cpu_id = sanitize_metric_id(f"svc_cpu_{service.name}")
+            mem_id = sanitize_metric_id(f"svc_mem_{service.name}")
+
+            cpu_value = metrics.get(cpu_id)
+            mem_value = metrics.get(mem_id)
+
+            # Set values (None if no data)
+            service.cpu_used = cpu_value
+            service.memory_used = mem_value
 
     def _attach_metrics_to_containers(
         self,

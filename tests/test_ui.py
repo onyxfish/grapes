@@ -4,7 +4,7 @@ import pytest
 from datetime import datetime, timezone
 
 from textual.app import App, ComposeResult
-from textual.widgets import Static
+from textual.widgets import DataTable, Static
 
 from ecs_monitor.models import (
     Cluster,
@@ -291,3 +291,188 @@ class TestServiceDetailViewWidget:
             detail = app.query_one("#service-detail", ServiceDetailView)
             assert detail.service is not None
             assert len(detail.service.tasks) == 2
+
+
+class TestServiceListRaceConditions:
+    """Tests for ServiceList race condition handling."""
+
+    class ServiceListWithImmediateSetApp(App):
+        """Test app that sets services immediately after mounting (like the real app)."""
+
+        def __init__(self, services: list[Service]):
+            super().__init__()
+            self._services = services
+
+        def compose(self) -> ComposeResult:
+            yield ServiceList(id="service-list")
+
+        def on_mount(self) -> None:
+            # This mimics what the real app does: mount then immediately set services
+            service_list = self.query_one("#service-list", ServiceList)
+            service_list.services = self._services
+
+    class ServiceListWithEarlySetApp(App):
+        """Test app that sets services before mount completes."""
+
+        def __init__(self, services: list[Service]):
+            super().__init__()
+            self._services = services
+
+        def compose(self) -> ComposeResult:
+            service_list = ServiceList(id="service-list")
+            # Set services immediately during compose, before mount
+            service_list.services = self._services
+            yield service_list
+
+    class ServiceListMultipleUpdatesApp(App):
+        """Test app that updates services multiple times."""
+
+        def __init__(self, services: list[Service]):
+            super().__init__()
+            self._services = services
+
+        def compose(self) -> ComposeResult:
+            yield ServiceList(id="service-list")
+
+        def on_mount(self) -> None:
+            service_list = self.query_one("#service-list", ServiceList)
+            # Update services multiple times rapidly
+            service_list.services = []
+            service_list.services = self._services[:1] if self._services else []
+            service_list.services = self._services
+
+    @pytest.mark.asyncio
+    async def test_service_list_populates_when_set_immediately_after_mount(self):
+        """Test that ServiceList populates correctly when services are set immediately after mounting.
+
+        This test mimics the real app behavior where services are set right after
+        the widget is mounted. This was causing blank tables due to is_mounted being
+        False during on_mount().
+        """
+        cluster = create_test_cluster()
+        app = self.ServiceListWithImmediateSetApp(services=cluster.services)
+
+        async with app.run_test():
+            service_list = app.query_one("#service-list", ServiceList)
+            table = service_list.query_one("#services-table", DataTable)
+            # The table should have rows populated
+            assert table.row_count == 2
+            assert len(service_list.services) == 2
+
+    @pytest.mark.asyncio
+    async def test_service_list_handles_early_service_assignment(self):
+        """Test that ServiceList handles services being set before mount."""
+        cluster = create_test_cluster()
+        app = self.ServiceListWithEarlySetApp(services=cluster.services)
+
+        # This should not raise an error
+        async with app.run_test():
+            service_list = app.query_one("#service-list", ServiceList)
+            # After mount completes, services should be accessible
+            assert len(service_list.services) == 2
+
+    @pytest.mark.asyncio
+    async def test_service_list_handles_multiple_rapid_updates(self):
+        """Test that ServiceList handles multiple rapid service updates."""
+        cluster = create_test_cluster()
+        app = self.ServiceListMultipleUpdatesApp(services=cluster.services)
+
+        # This should not raise an error
+        async with app.run_test():
+            service_list = app.query_one("#service-list", ServiceList)
+            # Final state should reflect last update
+            assert len(service_list.services) == 2
+
+    @pytest.mark.asyncio
+    async def test_service_list_update_table_before_mount(self):
+        """Test that _update_table handles being called before mount."""
+        cluster = create_test_cluster()
+
+        class DirectUpdateApp(App):
+            def compose(self) -> ComposeResult:
+                yield ServiceList(id="service-list")
+
+        app = DirectUpdateApp()
+
+        async with app.run_test():
+            service_list = app.query_one("#service-list", ServiceList)
+            # Manually call _update_table - should not raise
+            service_list._update_table()
+
+
+class TestServiceDetailViewRaceConditions:
+    """Tests for ServiceDetailView race condition handling."""
+
+    class ServiceDetailWithEarlySetApp(App):
+        """Test app that sets service before mount completes."""
+
+        def __init__(self, service: Service):
+            super().__init__()
+            self._service = service
+
+        def compose(self) -> ComposeResult:
+            detail = ServiceDetailView(id="service-detail")
+            # Set service immediately during compose, before mount
+            detail.service = self._service
+            yield detail
+
+    class ServiceDetailMultipleUpdatesApp(App):
+        """Test app that updates service multiple times."""
+
+        def __init__(self, service: Service):
+            super().__init__()
+            self._service = service
+
+        def compose(self) -> ComposeResult:
+            yield ServiceDetailView(id="service-detail")
+
+        def on_mount(self) -> None:
+            detail = self.query_one("#service-detail", ServiceDetailView)
+            # Update service multiple times rapidly
+            detail.service = None
+            detail.service = self._service
+            detail.service = None
+            detail.service = self._service
+
+    @pytest.mark.asyncio
+    async def test_service_detail_handles_early_service_assignment(self):
+        """Test that ServiceDetailView handles service being set before mount."""
+        cluster = create_test_cluster()
+        service = cluster.services[0]
+        app = self.ServiceDetailWithEarlySetApp(service=service)
+
+        # This should not raise an error
+        async with app.run_test():
+            detail = app.query_one("#service-detail", ServiceDetailView)
+            assert detail.service is not None
+            assert detail.service.name == "web-service"
+
+    @pytest.mark.asyncio
+    async def test_service_detail_handles_multiple_rapid_updates(self):
+        """Test that ServiceDetailView handles multiple rapid service updates."""
+        cluster = create_test_cluster()
+        service = cluster.services[0]
+        app = self.ServiceDetailMultipleUpdatesApp(service=service)
+
+        # This should not raise an error
+        async with app.run_test():
+            detail = app.query_one("#service-detail", ServiceDetailView)
+            # Final state should reflect last update
+            assert detail.service is not None
+            assert detail.service.name == "web-service"
+
+    @pytest.mark.asyncio
+    async def test_service_detail_update_table_before_mount(self):
+        """Test that _update_table handles being called before mount."""
+        cluster = create_test_cluster()
+
+        class DirectUpdateApp(App):
+            def compose(self) -> ComposeResult:
+                yield ServiceDetailView(id="service-detail")
+
+        app = DirectUpdateApp()
+
+        async with app.run_test():
+            detail = app.query_one("#service-detail", ServiceDetailView)
+            # Manually call _update_table - should not raise
+            detail._update_table()

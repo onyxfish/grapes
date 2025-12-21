@@ -118,8 +118,10 @@ class ECSFetcher:
             service = self._build_service(service_data)
 
             # Attach tasks to service
-            service_arn = service_data["serviceArn"]
-            service.tasks = tasks_by_service.get(service_arn, [])
+            # Tasks are keyed by group format "service:service-name"
+            service_name = service_data.get("serviceName", "")
+            service_group_key = f"service:{service_name}"
+            service.tasks = tasks_by_service.get(service_group_key, [])
 
             # Recalculate health now that tasks are attached
             service_objects.append(service)
@@ -298,12 +300,29 @@ class ECSFetcher:
 
         # Build container definitions map for looking up limits
         container_defs = {}
+        # Task-level CPU/memory (used by Fargate, optional for EC2)
+        task_level_cpu = None
+        task_level_memory = None
         if task_def:
             for cdef in task_def.get("containerDefinitions", []):
                 container_defs[cdef.get("name", "")] = cdef
+            # Task-level resources (in Fargate these are strings like "256" or "0.25 vCPU")
+            task_cpu_str = task_def.get("cpu")
+            task_mem_str = task_def.get("memory")
+            if task_cpu_str:
+                try:
+                    task_level_cpu = int(task_cpu_str)
+                except ValueError:
+                    pass
+            if task_mem_str:
+                try:
+                    task_level_memory = int(task_mem_str)
+                except ValueError:
+                    pass
 
         # Build containers
         containers = []
+        num_containers = len(task_data.get("containers", []))
         for container_data in task_data.get("containers", []):
             container_name = container_data.get("name", "")
             container_def = container_defs.get(container_name, {})
@@ -313,13 +332,29 @@ class ECSFetcher:
                 container_data.get("healthStatus")
             )
 
+            # Get container-level limits, fall back to task-level divided by container count
+            # Note: In ECS, cpu=0 means "no limit specified", so treat 0 as None
+            cpu_limit = container_def.get("cpu") or None
+            memory_limit = (
+                container_def.get("memory") or container_def.get("memoryReservation")
+            ) or None
+
+            # If no container-level limits, use task-level (divided among containers)
+            if cpu_limit is None and task_level_cpu is not None and num_containers > 0:
+                cpu_limit = task_level_cpu // num_containers
+            if (
+                memory_limit is None
+                and task_level_memory is not None
+                and num_containers > 0
+            ):
+                memory_limit = task_level_memory // num_containers
+
             container = Container(
                 name=container_name,
                 status=container_data.get("lastStatus", "UNKNOWN"),
                 health_status=health_status,
-                cpu_limit=container_def.get("cpu"),
-                memory_limit=container_def.get("memory")
-                or container_def.get("memoryReservation"),
+                cpu_limit=cpu_limit,
+                memory_limit=memory_limit,
                 exit_code=container_data.get("exitCode"),
                 reason=container_data.get("reason"),
             )

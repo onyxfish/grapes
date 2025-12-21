@@ -1,5 +1,7 @@
 """Unified task and container view widget for ECS Monitor."""
 
+import logging
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.message import Message
@@ -7,6 +9,8 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Static
 
 from ecs_monitor.models import Service, Task, Container, HealthStatus
+
+logger = logging.getLogger(__name__)
 
 
 class TaskViewBack(Message):
@@ -24,6 +28,7 @@ class ServiceDetailView(Static):
     ]
 
     service: reactive[Service | None] = reactive(None)
+    _columns_ready: bool = False  # Track if columns have been set up
 
     def compose(self) -> ComposeResult:
         """Compose the service detail layout."""
@@ -48,6 +53,18 @@ class ServiceDetailView(Static):
         table.add_column("MEM", width=16)
         table.add_column("C.HEALTH", width=8)
 
+        # Mark columns as ready
+        self._columns_ready = True
+
+        # Now that columns are set up, update the view
+        # This handles the case where service was set before mount completed
+        self._update_header()
+        self._update_deployments()
+        self._update_table()
+
+        # Focus the table so it's immediately interactive
+        table.focus()
+
     def watch_service(self, service: Service | None) -> None:
         """Update display when service changes."""
         self._update_header()
@@ -56,7 +73,13 @@ class ServiceDetailView(Static):
 
     def _update_header(self) -> None:
         """Update the service header."""
-        header = self.query_one("#service-header", Static)
+        if not self._columns_ready:
+            return
+
+        try:
+            header = self.query_one("#service-header", Static)
+        except Exception:
+            return
 
         if self.service is None:
             header.update("No service selected")
@@ -72,7 +95,13 @@ class ServiceDetailView(Static):
 
     def _update_deployments(self) -> None:
         """Update the deployments section."""
-        section = self.query_one("#deployments-section", Static)
+        if not self._columns_ready:
+            return
+
+        try:
+            section = self.query_one("#deployments-section", Static)
+        except Exception:
+            return
 
         if self.service is None or not self.service.deployments:
             section.update("")
@@ -89,7 +118,19 @@ class ServiceDetailView(Static):
 
     def _update_table(self) -> None:
         """Update the tasks table with containers."""
-        table = self.query_one("#tasks-table", DataTable)
+        # Check if columns have been set up (happens in on_mount)
+        if not self._columns_ready:
+            logger.debug(
+                "ServiceDetailView._update_table: columns not ready yet, skipping"
+            )
+            return
+
+        try:
+            table = self.query_one("#tasks-table", DataTable)
+        except Exception:
+            logger.debug("ServiceDetailView._update_table: table not found, skipping")
+            return
+
         table.clear()
 
         if self.service is None:

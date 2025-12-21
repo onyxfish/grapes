@@ -47,6 +47,10 @@ class Service:
     deployments: list[Deployment] = field(default_factory=list)
     tasks: list[Task] = field(default_factory=list)
 
+    # Service-level resource utilization (from CloudWatch metrics)
+    cpu_used: float | None = None  # CPU percentage
+    memory_used: float | None = None  # Memory percentage
+
     @property
     def tasks_display(self) -> str:
         """Format task counts as 'running/desired'."""
@@ -122,3 +126,17 @@ class Service:
 
         health = self.calculate_health()
         return f"{health.symbol} {healthy_count}/{len(running_tasks)}"
+
+    @property
+    def cpu_display(self) -> str:
+        """Format CPU usage as percentage."""
+        if self.cpu_used is not None:
+            return f"{self.cpu_used:.1f}%"
+        return "-"
+
+    @property
+    def memory_display(self) -> str:
+        """Format memory usage as percentage."""
+        if self.memory_used is not None:
+            return f"{self.memory_used:.1f}%"
+        return "-"
