@@ -8,12 +8,13 @@ from pathlib import Path
 from ecs_monitor.config import ConfigError, get_default_config_path, load_config
 
 
-def setup_logging(verbose: bool = False, debug: bool = False) -> None:
+def setup_logging(verbose: bool = False, debug: bool = False, tui: bool = True) -> None:
     """Set up logging configuration.
 
     Args:
         verbose: If True, enable info logging
         debug: If True, enable debug logging
+        tui: If True, suppress console logging (TUI handles its own log display)
     """
     if debug:
         level = logging.DEBUG
@@ -21,11 +22,22 @@ def setup_logging(verbose: bool = False, debug: bool = False) -> None:
         level = logging.INFO
     else:
         level = logging.WARNING
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        stream=sys.stderr,
-    )
+
+    if tui:
+        # When running TUI, don't output logs to console - the TUI has its own
+        # debug console that captures logs via TextualLogHandler
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[logging.NullHandler()],
+        )
+    else:
+        # For debug mode or non-TUI usage, output to stderr
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            stream=sys.stderr,
+        )
 
 
 def parse_args() -> argparse.Namespace:
@@ -163,7 +175,6 @@ def main() -> int:
         Exit code (0 for success, non-zero for error)
     """
     args = parse_args()
-    setup_logging(args.verbose, args.debug)
 
     # Determine config path
     if args.config:
@@ -198,6 +209,8 @@ interval = 30
 
     # If debug mode, run a test fetch first
     if args.debug:
+        # Enable console logging for debug mode
+        setup_logging(args.verbose, args.debug, tui=False)
         print_status("Running in debug mode...")
         success = run_debug_fetch(config)
         if not success:
@@ -205,6 +218,9 @@ interval = 30
         print_status("")
         print_status("Starting TUI (press Ctrl+C to exit)...")
         print_status("")
+
+    # Set up logging for TUI mode (suppresses console output)
+    setup_logging(args.verbose, args.debug, tui=True)
 
     # Create and run the application
     try:

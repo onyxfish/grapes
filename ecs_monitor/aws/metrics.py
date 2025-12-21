@@ -36,7 +36,6 @@ class MetricsFetcher:
 
     def _report_progress(self, message: str) -> None:
         """Report progress if callback is set."""
-        logger.info(message)
         if self._progress_callback:
             self._progress_callback(message)
 

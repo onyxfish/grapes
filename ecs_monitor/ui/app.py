@@ -22,6 +22,7 @@ from ecs_monitor.ui.console_link import (
     build_service_url,
     build_task_url,
     copy_to_clipboard,
+    open_in_browser,
 )
 from ecs_monitor.ui.debug_console import DebugConsole, TextualLogHandler
 from ecs_monitor.ui.service_view import ServiceList, ServiceSelected
@@ -58,6 +59,7 @@ class ECSMonitorApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
+        Binding("o", "open_console", "Open Console"),
         Binding("c", "copy_url", "Copy URL"),
         Binding("escape", "go_back", "Back"),
     ]
@@ -125,7 +127,7 @@ class ECSMonitorApp(App):
         """Set up the application when mounted."""
         # Set up debug console logging handler
         debug_console = self.query_one("#debug-console", DebugConsole)
-        handler = TextualLogHandler(debug_console)
+        handler = TextualLogHandler(debug_console, self)
 
         # Always capture INFO and above for the debug console
         # This ensures useful logs are visible when the console is toggled on
@@ -363,6 +365,51 @@ class ECSMonitorApp(App):
                 self.notify("Console URL copied to clipboard")
             else:
                 self.notify(f"URL: {url}", severity="warning")
+
+    def action_open_console(self) -> None:
+        """Open the appropriate console URL in a browser."""
+        if self.cluster is None:
+            return
+
+        region = self.config.cluster.region
+        cluster_name = self.config.cluster.name
+        url = None
+
+        if self.selected_service is not None:
+            # We're in service detail view
+            try:
+                detail_view = self.query_one("#service-detail", ServiceDetailView)
+                task, container = detail_view.get_selected_task_and_container()
+
+                if container is not None and task is not None:
+                    url = build_container_url(cluster_name, task.id, region)
+                elif task is not None:
+                    url = build_task_url(cluster_name, task.id, region)
+                else:
+                    url = build_service_url(
+                        cluster_name, self.selected_service.name, region
+                    )
+            except Exception:
+                url = build_service_url(
+                    cluster_name, self.selected_service.name, region
+                )
+        else:
+            # We're in service list view
+            try:
+                service_list = self.query_one("#service-list", ServiceList)
+                selected = service_list.get_selected_service()
+                if selected:
+                    url = build_service_url(cluster_name, selected.name, region)
+                else:
+                    url = build_cluster_url(cluster_name, region)
+            except Exception:
+                url = build_cluster_url(cluster_name, region)
+
+        if url:
+            if open_in_browser(url):
+                self.notify("Opening in browser...")
+            else:
+                self.notify(f"Failed to open browser. URL: {url}", severity="warning")
 
     def action_toggle_debug_console(self) -> None:
         """Toggle the debug console visibility."""

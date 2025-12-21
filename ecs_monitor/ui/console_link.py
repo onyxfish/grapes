@@ -1,6 +1,7 @@
 """AWS Console URL generation and clipboard functionality."""
 
 import logging
+import webbrowser
 
 try:
     import pyperclip
@@ -83,8 +84,25 @@ def copy_to_clipboard(text: str) -> bool:
         return False
 
     try:
-        pyperclip.copy(text)
+        pyperclip.copy(text)  # type: ignore[possibly-undefined]
         return True
     except Exception as e:
         logger.warning(f"Failed to copy to clipboard: {e}")
+        return False
+
+
+def open_in_browser(url: str) -> bool:
+    """Open URL in the default web browser.
+
+    Args:
+        url: URL to open
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        webbrowser.open(url)
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to open browser: {e}")
         return False
