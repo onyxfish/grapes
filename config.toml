@@ -1,0 +1,11 @@
+# ECS Monitor Configuration
+# Copy this file and customize for your cluster
+
+[cluster]
+name = "gravity-prod-cluster"      # Required: ECS cluster name
+region = "us-west-2"         # Required: AWS region
+# profile = "default"        # Optional: AWS profile name (uses default credential chain if not set)
+
+[refresh]
+interval = 30                # Optional: API poll interval in seconds (default: 30)
+task_definition_interval = 300  # Optional: Task def cache TTL in seconds (default: 300)
