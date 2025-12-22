@@ -21,14 +21,22 @@ class ServiceSelected(Message):
         super().__init__()
 
 
+class ServiceDeselected(Message):
+    """Message sent when a service is deselected (Escape pressed)."""
+
+    pass
+
+
 class ServiceList(Static):
     """Widget displaying list of ECS services."""
 
     BINDINGS = [
-        Binding("enter", "select_service", "View Details"),
+        Binding("enter", "select_service", "View Tasks"),
+        Binding("escape", "deselect_service", "Close Tasks", show=False),
     ]
 
     services: reactive[list[Service]] = reactive(list, always_update=True)
+    selected_service_name: reactive[str | None] = reactive(None)
     _columns_ready: bool = False  # Track if columns have been set up
 
     def compose(self) -> ComposeResult:
@@ -53,18 +61,22 @@ class ServiceList(Static):
         table.add_column("IMAGE")
         table.add_column("DEPLOYMENT")
 
-        # Mark columns as ready
+        # Mark columns as ready - this will allow watchers to update the table
         self._columns_ready = True
 
         # Focus the table so it's immediately interactive
         table.focus()
 
-        # Now that columns are set up, update the table
-        # This handles the case where services were set before mount completed
-        self._update_table()
+        # Note: We don't call _update_table() here because the reactive watchers
+        # will fire after on_mount completes and handle the initial population.
+        # Calling it here would cause duplicate rows if services were set before mount.
 
     def watch_services(self, services: list[Service]) -> None:
         """Update table when services change."""
+        self._update_table()
+
+    def watch_selected_service_name(self, name: str | None) -> None:
+        """Update table highlighting when selected service changes."""
         self._update_table()
 
     def _update_table(self) -> None:
@@ -86,6 +98,9 @@ class ServiceList(Static):
             health = service.calculate_health()
             health_display = service.health_display
 
+            # Check if this service is selected
+            is_selected = service.name == self.selected_service_name
+
             # Color the health display
             if health == HealthStatus.HEALTHY:
                 health_styled = f"[green]{health_display}[/green]"
@@ -102,8 +117,15 @@ class ServiceList(Static):
             else:
                 status_styled = f"[yellow]{service.status}[/yellow]"
 
+            # Add selection indicator to name (without color change to avoid
+            # confusion with the table's row cursor highlighting)
+            if is_selected:
+                name_display = f"▶ {service.name}"
+            else:
+                name_display = f"  {service.name}"
+
             table.add_row(
-                service.name,
+                name_display,
                 status_styled,
                 service.tasks_display,
                 health_styled,
@@ -147,6 +169,11 @@ class ServiceList(Static):
             # Fallback: use cursor row index
             if table.cursor_row < len(self.services):
                 self.post_message(ServiceSelected(self.services[table.cursor_row]))
+
+    def action_deselect_service(self) -> None:
+        """Handle service deselection (Escape key)."""
+        if self.selected_service_name is not None:
+            self.post_message(ServiceDeselected())
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row double-click selection."""

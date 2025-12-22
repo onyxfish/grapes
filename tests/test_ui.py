@@ -16,7 +16,7 @@ from ecs_monitor.models import (
 )
 from ecs_monitor.ui.cluster_view import ClusterHeader, LoadingScreen
 from ecs_monitor.ui.service_view import ServiceList
-from ecs_monitor.ui.task_view import ServiceDetailView
+from ecs_monitor.ui.task_view import TaskList
 
 
 def create_test_cluster() -> Cluster:
@@ -251,46 +251,46 @@ class TestServiceListWidget:
             assert len(service_list.services) == 0
 
 
-class TestServiceDetailViewWidget:
-    """Tests for ServiceDetailView widget."""
+class TestTaskListWidget:
+    """Tests for TaskList widget."""
 
-    class ServiceDetailApp(App):
-        """Test app for ServiceDetailView."""
+    class TaskListApp(App):
+        """Test app for TaskList."""
 
         def __init__(self, service: Service | None = None):
             super().__init__()
             self._service = service
 
         def compose(self) -> ComposeResult:
-            yield ServiceDetailView(id="service-detail")
+            yield TaskList(id="task-list")
 
         def on_mount(self) -> None:
-            detail = self.query_one("#service-detail", ServiceDetailView)
-            detail.service = self._service
+            task_list = self.query_one("#task-list", TaskList)
+            task_list.service = self._service
 
     @pytest.mark.asyncio
-    async def test_service_detail_displays_service(self):
-        """Test that service detail displays service information."""
+    async def test_task_list_displays_service(self):
+        """Test that task list displays service information."""
         cluster = create_test_cluster()
         service = cluster.services[0]
-        app = self.ServiceDetailApp(service=service)
+        app = self.TaskListApp(service=service)
 
         async with app.run_test():
-            detail = app.query_one("#service-detail", ServiceDetailView)
-            assert detail.service is not None
-            assert detail.service.name == "web-service"
+            task_list = app.query_one("#task-list", TaskList)
+            assert task_list.service is not None
+            assert task_list.service.name == "web-service"
 
     @pytest.mark.asyncio
-    async def test_service_detail_displays_tasks(self):
-        """Test that service detail displays tasks."""
+    async def test_task_list_displays_tasks(self):
+        """Test that task list displays tasks."""
         cluster = create_test_cluster()
         service = cluster.services[0]
-        app = self.ServiceDetailApp(service=service)
+        app = self.TaskListApp(service=service)
 
         async with app.run_test():
-            detail = app.query_one("#service-detail", ServiceDetailView)
-            assert detail.service is not None
-            assert len(detail.service.tasks) == 2
+            task_list = app.query_one("#task-list", TaskList)
+            assert task_list.service is not None
+            assert len(task_list.service.tasks) == 2
 
 
 class TestServiceListRaceConditions:
@@ -400,10 +400,10 @@ class TestServiceListRaceConditions:
             service_list._update_table()
 
 
-class TestServiceDetailViewRaceConditions:
-    """Tests for ServiceDetailView race condition handling."""
+class TestTaskListRaceConditions:
+    """Tests for TaskList race condition handling."""
 
-    class ServiceDetailWithEarlySetApp(App):
+    class TaskListWithEarlySetApp(App):
         """Test app that sets service before mount completes."""
 
         def __init__(self, service: Service):
@@ -411,12 +411,12 @@ class TestServiceDetailViewRaceConditions:
             self._service = service
 
         def compose(self) -> ComposeResult:
-            detail = ServiceDetailView(id="service-detail")
+            task_list = TaskList(id="task-list")
             # Set service immediately during compose, before mount
-            detail.service = self._service
-            yield detail
+            task_list.service = self._service
+            yield task_list
 
-    class ServiceDetailMultipleUpdatesApp(App):
+    class TaskListMultipleUpdatesApp(App):
         """Test app that updates service multiple times."""
 
         def __init__(self, service: Service):
@@ -424,55 +424,55 @@ class TestServiceDetailViewRaceConditions:
             self._service = service
 
         def compose(self) -> ComposeResult:
-            yield ServiceDetailView(id="service-detail")
+            yield TaskList(id="task-list")
 
         def on_mount(self) -> None:
-            detail = self.query_one("#service-detail", ServiceDetailView)
+            task_list = self.query_one("#task-list", TaskList)
             # Update service multiple times rapidly
-            detail.service = None
-            detail.service = self._service
-            detail.service = None
-            detail.service = self._service
+            task_list.service = None
+            task_list.service = self._service
+            task_list.service = None
+            task_list.service = self._service
 
     @pytest.mark.asyncio
-    async def test_service_detail_handles_early_service_assignment(self):
-        """Test that ServiceDetailView handles service being set before mount."""
+    async def test_task_list_handles_early_service_assignment(self):
+        """Test that TaskList handles service being set before mount."""
         cluster = create_test_cluster()
         service = cluster.services[0]
-        app = self.ServiceDetailWithEarlySetApp(service=service)
+        app = self.TaskListWithEarlySetApp(service=service)
 
         # This should not raise an error
         async with app.run_test():
-            detail = app.query_one("#service-detail", ServiceDetailView)
-            assert detail.service is not None
-            assert detail.service.name == "web-service"
+            task_list = app.query_one("#task-list", TaskList)
+            assert task_list.service is not None
+            assert task_list.service.name == "web-service"
 
     @pytest.mark.asyncio
-    async def test_service_detail_handles_multiple_rapid_updates(self):
-        """Test that ServiceDetailView handles multiple rapid service updates."""
+    async def test_task_list_handles_multiple_rapid_updates(self):
+        """Test that TaskList handles multiple rapid service updates."""
         cluster = create_test_cluster()
         service = cluster.services[0]
-        app = self.ServiceDetailMultipleUpdatesApp(service=service)
+        app = self.TaskListMultipleUpdatesApp(service=service)
 
         # This should not raise an error
         async with app.run_test():
-            detail = app.query_one("#service-detail", ServiceDetailView)
+            task_list = app.query_one("#task-list", TaskList)
             # Final state should reflect last update
-            assert detail.service is not None
-            assert detail.service.name == "web-service"
+            assert task_list.service is not None
+            assert task_list.service.name == "web-service"
 
     @pytest.mark.asyncio
-    async def test_service_detail_update_table_before_mount(self):
+    async def test_task_list_update_table_before_mount(self):
         """Test that _update_table handles being called before mount."""
         cluster = create_test_cluster()
 
         class DirectUpdateApp(App):
             def compose(self) -> ComposeResult:
-                yield ServiceDetailView(id="service-detail")
+                yield TaskList(id="task-list")
 
         app = DirectUpdateApp()
 
         async with app.run_test():
-            detail = app.query_one("#service-detail", ServiceDetailView)
+            task_list = app.query_one("#task-list", TaskList)
             # Manually call _update_table - should not raise
-            detail._update_table()
+            task_list._update_table()

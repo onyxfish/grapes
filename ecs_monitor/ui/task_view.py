@@ -1,10 +1,8 @@
-"""Unified task and container view widget for ECS Monitor."""
+"""Task list widget for ECS Monitor."""
 
 import logging
 
 from textual.app import ComposeResult
-from textual.binding import Binding
-from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import DataTable, Static
 
@@ -13,25 +11,14 @@ from ecs_monitor.models import Service, Task, Container, HealthStatus
 logger = logging.getLogger(__name__)
 
 
-class TaskViewBack(Message):
-    """Message sent when user wants to go back to service list."""
-
-    pass
-
-
-class ServiceDetailView(Static):
-    """Widget displaying service details and tasks/containers."""
-
-    BINDINGS = [
-        Binding("escape", "go_back", "Back"),
-    ]
+class TaskList(Static):
+    """Widget displaying tasks and containers for a service."""
 
     service: reactive[Service | None] = reactive(None)
     _columns_ready: bool = False  # Track if columns have been set up
 
     def compose(self) -> ComposeResult:
-        """Compose the service detail layout."""
-        yield Static(id="service-header")
+        """Compose the task list layout."""
         yield Static("[bold]Tasks & Containers[/bold]", id="tasks-title")
         yield DataTable(id="tasks-table")
 
@@ -42,7 +29,6 @@ class ServiceDetailView(Static):
         table.zebra_stripes = True
 
         # Responsive columns - no fixed width allows auto-sizing
-        # Columns will expand to fill available space
         table.add_column("TASK")
         table.add_column("STATUS")
         table.add_column("HEALTH")
@@ -56,8 +42,6 @@ class ServiceDetailView(Static):
         self._columns_ready = True
 
         # Now that columns are set up, update the view
-        # This handles the case where service was set before mount completed
-        self._update_header()
         self._update_table()
 
         # Focus the table so it's immediately interactive
@@ -65,44 +49,19 @@ class ServiceDetailView(Static):
 
     def watch_service(self, service: Service | None) -> None:
         """Update display when service changes."""
-        self._update_header()
         self._update_table()
-
-    def _update_header(self) -> None:
-        """Update the service header."""
-        if not self._columns_ready:
-            return
-
-        try:
-            header = self.query_one("#service-header", Static)
-        except Exception:
-            return
-
-        if self.service is None:
-            header.update("No service selected")
-            return
-
-        s = self.service
-        header.update(
-            f"[bold]Service: {s.name}[/bold]\n"
-            f"Status: {s.status}              "
-            f"Desired: {s.desired_count}   Running: {s.running_count}\n"
-            f"Task Definition: {s.task_definition}"
-        )
 
     def _update_table(self) -> None:
         """Update the tasks table with containers."""
         # Check if columns have been set up (happens in on_mount)
         if not self._columns_ready:
-            logger.debug(
-                "ServiceDetailView._update_table: columns not ready yet, skipping"
-            )
+            logger.debug("TaskList._update_table: columns not ready yet, skipping")
             return
 
         try:
             table = self.query_one("#tasks-table", DataTable)
         except Exception:
-            logger.debug("ServiceDetailView._update_table: table not found, skipping")
+            logger.debug("TaskList._update_table: table not found, skipping")
             return
 
         table.clear()
@@ -184,16 +143,16 @@ class ServiceDetailView(Static):
         else:
             return f"[dim]{status}[/dim]"
 
-    def action_go_back(self) -> None:
-        """Handle going back to service list."""
-        self.post_message(TaskViewBack())
-
     def get_selected_task_and_container(self) -> tuple[Task | None, Container | None]:
         """Get the currently selected task and container (if any)."""
         if self.service is None:
             return None, None
 
-        table = self.query_one("#tasks-table", DataTable)
+        try:
+            table = self.query_one("#tasks-table", DataTable)
+        except Exception:
+            return None, None
+
         if table.cursor_row is None:
             return None, None
 

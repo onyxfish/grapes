@@ -40,6 +40,25 @@ LoadingScreen {
     border: solid $primary;
 }
 
+/* Main content container */
+#main-content {
+    height: 1fr;
+}
+
+/* Services container - takes up space, shrinks when tasks visible */
+#services-container {
+    height: 1fr;
+    min-height: 8;
+}
+
+/* Tasks container - initially hidden, takes space when visible */
+#tasks-container {
+    height: 1fr;
+    min-height: 8;
+    border-top: solid $primary;
+    margin-top: 1;
+}
+
 /* Service list */
 ServiceList {
     height: 100%;
@@ -56,17 +75,9 @@ ServiceList {
     height: 1fr;
 }
 
-/* Service detail view */
-ServiceDetailView {
+/* Task list */
+TaskList {
     height: 100%;
-}
-
-#service-header {
-    height: auto;
-    padding: 1;
-    background: $panel;
-    border: solid $primary;
-    margin-bottom: 1;
 }
 
 #tasks-title {
@@ -131,11 +142,6 @@ Footer {
 /* Horizontal containers */
 Horizontal {
     height: auto;
-}
-
-/* Main content container */
-#main-content {
-    height: 1fr;
 }
 
 /* Debug console */

@@ -24,8 +24,8 @@ from ecs_monitor.ui.console_link import (
     open_in_browser,
 )
 from ecs_monitor.ui.debug_console import DebugConsole, TextualLogHandler
-from ecs_monitor.ui.service_view import ServiceList, ServiceSelected
-from ecs_monitor.ui.task_view import ServiceDetailView, TaskViewBack
+from ecs_monitor.ui.service_view import ServiceList, ServiceSelected, ServiceDeselected
+from ecs_monitor.ui.task_view import TaskList
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,14 @@ class ECSMonitorApp(App):
         yield LoadingScreen(id="loading")
         yield Vertical(
             ClusterHeader(id="cluster-header"),
-            Container(id="main-content"),
+            Container(
+                ServiceList(id="service-list"),
+                id="services-container",
+            ),
+            Container(
+                TaskList(id="task-list"),
+                id="tasks-container",
+            ),
             id="main-container",
         )
         yield DebugConsole(id="debug-console")
@@ -145,6 +152,9 @@ class ECSMonitorApp(App):
         # Hide main container initially, show loading
         self.query_one("#main-container").display = False
         self.query_one("#loading").display = True
+
+        # Hide tasks container initially (no service selected)
+        self.query_one("#tasks-container").display = False
 
         # Start initial data fetch
         self.refresh_data()
@@ -219,15 +229,15 @@ class ECSMonitorApp(App):
                         self.loading = False
                         self.query_one("#loading").display = False
                         self.query_one("#main-container").display = True
-                        self._show_service_list()
 
                     # Update header
                     header = self.query_one("#cluster-header", ClusterHeader)
                     header.cluster = self.cluster
                     header.insights_enabled = self.insights_enabled
 
-                    # Update current view
-                    self._update_current_view()
+                    # Update views
+                    self._update_service_list()
+                    self._update_task_list()
                 else:
                     logger.warning("Worker returned None result")
 
@@ -244,51 +254,21 @@ class ECSMonitorApp(App):
                     f"Error loading data: {event.worker.error}", severity="error"
                 )
 
-    def _show_service_list(self) -> None:
-        """Show the service list view."""
-        self.selected_service = None
-        content = self.query_one("#main-content", Container)
-        content.remove_children()
-        service_list = ServiceList(id="service-list")
-        content.mount(service_list)
-        # Immediately populate if we have cluster data
-        if self.cluster:
-            service_list.services = self.cluster.services
-
-    def _show_service_detail(self, service: Service) -> None:
-        """Show the service detail view.
-
-        Args:
-            service: Service to display
-        """
-        self.selected_service = service
-        content = self.query_one("#main-content", Container)
-        content.remove_children()
-
-        detail_view = ServiceDetailView(id="service-detail")
-        content.mount(detail_view)
-        detail_view.service = service
-
-    def _update_current_view(self) -> None:
-        """Update the current view with latest data."""
-        if self.selected_service is not None:
-            # Update service detail view
-            self._update_service_detail()
-        else:
-            # Update service list
-            self._update_service_list()
-
     def _update_service_list(self) -> None:
         """Update the service list with current cluster data."""
         try:
             service_list = self.query_one("#service-list", ServiceList)
             if self.cluster:
                 service_list.services = self.cluster.services
+                # Update selection indicator
+                service_list.selected_service_name = (
+                    self.selected_service.name if self.selected_service else None
+                )
         except Exception:
             pass  # View might not exist yet
 
-    def _update_service_detail(self) -> None:
-        """Update the service detail view with current data."""
+    def _update_task_list(self) -> None:
+        """Update the task list with current service data."""
         if self.selected_service is None or self.cluster is None:
             return
 
@@ -297,24 +277,82 @@ class ECSMonitorApp(App):
             if service.name == self.selected_service.name:
                 self.selected_service = service
                 try:
-                    detail_view = self.query_one("#service-detail", ServiceDetailView)
-                    detail_view.service = service
+                    task_list = self.query_one("#task-list", TaskList)
+                    task_list.service = service
                 except Exception:
                     pass
                 break
 
+    def _show_task_list(self, service: Service) -> None:
+        """Show the task list for a service.
+
+        Args:
+            service: Service to display tasks for
+        """
+        self.selected_service = service
+
+        # Update service list to show selection indicator
+        try:
+            service_list = self.query_one("#service-list", ServiceList)
+            service_list.selected_service_name = service.name
+        except Exception:
+            pass
+
+        # Show and populate task list
+        tasks_container = self.query_one("#tasks-container")
+        tasks_container.display = True
+
+        try:
+            task_list = self.query_one("#task-list", TaskList)
+            task_list.service = service
+            # Focus the tasks table
+            tasks_table = task_list.query_one("#tasks-table")
+            tasks_table.focus()
+        except Exception:
+            pass
+
+    def _hide_task_list(self) -> None:
+        """Hide the task list."""
+        self.selected_service = None
+
+        # Clear selection indicator in service list
+        try:
+            service_list = self.query_one("#service-list", ServiceList)
+            service_list.selected_service_name = None
+        except Exception:
+            pass
+
+        # Hide task list container
+        tasks_container = self.query_one("#tasks-container")
+        tasks_container.display = False
+
+        # Clear task list
+        try:
+            task_list = self.query_one("#task-list", TaskList)
+            task_list.service = None
+        except Exception:
+            pass
+
+        # Refocus service list
+        try:
+            service_list = self.query_one("#service-list", ServiceList)
+            table = service_list.query_one("#services-table")
+            table.focus()
+        except Exception:
+            pass
+
     def on_service_selected(self, event: ServiceSelected) -> None:
         """Handle service selection."""
-        self._show_service_detail(event.service)
+        self._show_task_list(event.service)
 
-    def on_task_view_back(self, event: TaskViewBack) -> None:
-        """Handle going back from task view."""
-        self._show_service_list()
+    def on_service_deselected(self, event: ServiceDeselected) -> None:
+        """Handle service deselection."""
+        self._hide_task_list()
 
     def action_go_back(self) -> None:
         """Handle escape key to go back."""
         if self.selected_service is not None:
-            self._show_service_list()
+            self._hide_task_list()
 
     def action_refresh(self) -> None:
         """Handle manual refresh request."""
@@ -331,10 +369,10 @@ class ECSMonitorApp(App):
         url = None
 
         if self.selected_service is not None:
-            # We're in service detail view
+            # Check if there's a selected task in the task list
             try:
-                detail_view = self.query_one("#service-detail", ServiceDetailView)
-                task, container = detail_view.get_selected_task_and_container()
+                task_list = self.query_one("#task-list", TaskList)
+                task, container = task_list.get_selected_task_and_container()
 
                 if container is not None and task is not None:
                     url = build_container_url(cluster_name, task.id, region)
@@ -349,7 +387,7 @@ class ECSMonitorApp(App):
                     cluster_name, self.selected_service.name, region
                 )
         else:
-            # We're in service list view
+            # Check if there's a highlighted service in the service list
             try:
                 service_list = self.query_one("#service-list", ServiceList)
                 selected = service_list.get_selected_service()
