@@ -43,14 +43,15 @@ class ServiceList(Static):
         table.cursor_type = "row"
         table.zebra_stripes = True
 
-        # Fixed-width columns
-        table.add_column("NAME", width=24)
-        table.add_column("STATUS", width=10)
-        table.add_column("TASKS", width=8)
-        table.add_column("HEALTH", width=10)
-        table.add_column("CPU", width=14)
-        table.add_column("MEM", width=16)
-        table.add_column("DEPLOYMENT", width=16)
+        # Responsive columns - no fixed width allows auto-sizing
+        # Columns will expand to fill available space
+        table.add_column("NAME")
+        table.add_column("STATUS")
+        table.add_column("TASKS")
+        table.add_column("HEALTH")
+        table.add_column("CPU")
+        table.add_column("MEM")
+        table.add_column("DEPLOYMENT")
 
         # Mark columns as ready
         self._columns_ready = True

@@ -43,15 +43,16 @@ class ServiceDetailView(Static):
         table.cursor_type = "row"
         table.zebra_stripes = True
 
-        # Fixed-width columns for unified task+container view
-        table.add_column("TASK", width=10)
-        table.add_column("STATUS", width=8)
-        table.add_column("HEALTH", width=8)
-        table.add_column("STARTED", width=10)
-        table.add_column("CONTAINER", width=16)
-        table.add_column("CPU", width=14)
-        table.add_column("MEM", width=16)
-        table.add_column("C.HEALTH", width=8)
+        # Responsive columns - no fixed width allows auto-sizing
+        # Columns will expand to fill available space
+        table.add_column("TASK")
+        table.add_column("STATUS")
+        table.add_column("HEALTH")
+        table.add_column("STARTED")
+        table.add_column("CONTAINER")
+        table.add_column("CPU")
+        table.add_column("MEM")
+        table.add_column("C.HEALTH")
 
         # Mark columns as ready
         self._columns_ready = True

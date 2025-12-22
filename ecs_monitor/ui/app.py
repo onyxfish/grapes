@@ -4,7 +4,7 @@ import logging
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.command import Hit, Hits, Provider
+from textual.command import CommandPalette, Hit, Hits, Provider
 from textual.containers import Container, Vertical
 from textual.reactive import reactive
 from textual.widgets import Footer
@@ -54,13 +54,15 @@ class ECSMonitorApp(App):
 
     CSS_PATH = "styles.css"
 
-    COMMANDS = {ToggleDebugConsoleCommand}
+    # Add our custom commands to the default set (which includes theme picker)
+    COMMANDS = App.COMMANDS | {ToggleDebugConsoleCommand}
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
         Binding("o", "open_console", "Open Console"),
         Binding("c", "copy_url", "Copy URL"),
+        Binding("d", "toggle_debug_console", "Debug"),
         Binding("escape", "go_back", "Back"),
     ]
 
