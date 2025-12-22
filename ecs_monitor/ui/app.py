@@ -4,7 +4,7 @@ import logging
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.command import CommandPalette, Hit, Hits, Provider
+from textual.command import Hit, Hits, Provider
 from textual.containers import Container, Vertical
 from textual.reactive import reactive
 from textual.widgets import Footer
@@ -21,7 +21,6 @@ from ecs_monitor.ui.console_link import (
     build_container_url,
     build_service_url,
     build_task_url,
-    copy_to_clipboard,
     open_in_browser,
 )
 from ecs_monitor.ui.debug_console import DebugConsole, TextualLogHandler
@@ -60,8 +59,7 @@ class ECSMonitorApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
-        Binding("o", "open_console", "Open Console"),
-        Binding("c", "copy_url", "Copy URL"),
+        Binding("o", "open_console", "Open in AWS Console"),
         Binding("d", "toggle_debug_console", "Debug"),
         Binding("escape", "go_back", "Back"),
     ]
@@ -322,51 +320,6 @@ class ECSMonitorApp(App):
         """Handle manual refresh request."""
         self.notify("Refreshing...")
         self.refresh_data()
-
-    def action_copy_url(self) -> None:
-        """Copy the appropriate console URL to clipboard."""
-        if self.cluster is None:
-            return
-
-        region = self.config.cluster.region
-        cluster_name = self.config.cluster.name
-        url = None
-
-        if self.selected_service is not None:
-            # We're in service detail view
-            try:
-                detail_view = self.query_one("#service-detail", ServiceDetailView)
-                task, container = detail_view.get_selected_task_and_container()
-
-                if container is not None and task is not None:
-                    url = build_container_url(cluster_name, task.id, region)
-                elif task is not None:
-                    url = build_task_url(cluster_name, task.id, region)
-                else:
-                    url = build_service_url(
-                        cluster_name, self.selected_service.name, region
-                    )
-            except Exception:
-                url = build_service_url(
-                    cluster_name, self.selected_service.name, region
-                )
-        else:
-            # We're in service list view
-            try:
-                service_list = self.query_one("#service-list", ServiceList)
-                selected = service_list.get_selected_service()
-                if selected:
-                    url = build_service_url(cluster_name, selected.name, region)
-                else:
-                    url = build_cluster_url(cluster_name, region)
-            except Exception:
-                url = build_cluster_url(cluster_name, region)
-
-        if url:
-            if copy_to_clipboard(url):
-                self.notify("Console URL copied to clipboard")
-            else:
-                self.notify(f"URL: {url}", severity="warning")
 
     def action_open_console(self) -> None:
         """Open the appropriate console URL in a browser."""

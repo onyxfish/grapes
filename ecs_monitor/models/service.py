@@ -47,6 +47,9 @@ class Service:
     deployments: list[Deployment] = field(default_factory=list)
     tasks: list[Task] = field(default_factory=list)
 
+    # Container images from task definition
+    images: list[str] = field(default_factory=list)
+
     # Service-level resource utilization (from CloudWatch metrics)
     cpu_used: float | None = None  # CPU percentage
     memory_used: float | None = None  # Memory percentage
@@ -126,6 +129,28 @@ class Service:
 
         health = self.calculate_health()
         return f"{health.symbol} {healthy_count}/{len(running_tasks)}"
+
+    @property
+    def image_display(self) -> str:
+        """Format container images for display.
+
+        Shows the image name without registry prefix for brevity.
+        If multiple images, shows the first one with a count indicator.
+        """
+        if not self.images:
+            return "-"
+
+        # Get the first image and simplify it
+        image = self.images[0]
+
+        # Remove registry prefix (everything before the last /)
+        # e.g., "123456789.dkr.ecr.us-east-1.amazonaws.com/my-app:latest" -> "my-app:latest"
+        if "/" in image:
+            image = image.rsplit("/", 1)[-1]
+
+        if len(self.images) > 1:
+            return f"{image} (+{len(self.images) - 1})"
+        return image
 
     @property
     def cpu_display(self) -> str:

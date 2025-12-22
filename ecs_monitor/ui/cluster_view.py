@@ -70,8 +70,7 @@ class LoadingScreen(Static):
 
     def compose(self) -> ComposeResult:
         """Compose the loading screen."""
-        yield Static(id="loading-title")
-        yield Static(id="loading-status")
+        yield Static(id="loading-message")
 
     def on_mount(self) -> None:
         """Initialize the loading screen."""
@@ -84,10 +83,12 @@ class LoadingScreen(Static):
     def _update_display(self) -> None:
         """Update the loading screen display."""
         try:
-            title = self.query_one("#loading-title", Static)
-            status = self.query_one("#loading-status", Static)
-            title.update("[bold]ECS Monitor[/bold]\n\nLoading cluster data...\n")
-            status.update(f"[cyan]{self.status_message}[/cyan]")
+            message = self.query_one("#loading-message", Static)
+            message.update(
+                f"[bold]ECS Monitor[/bold]\n\n"
+                f"Loading cluster data...\n\n"
+                f"[cyan]{self.status_message}[/cyan]"
+            )
         except Exception:
             pass  # Widget not mounted yet
 

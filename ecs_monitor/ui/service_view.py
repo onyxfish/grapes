@@ -26,7 +26,6 @@ class ServiceList(Static):
 
     BINDINGS = [
         Binding("enter", "select_service", "View Details"),
-        Binding("c", "copy_url", "Copy Console URL"),
     ]
 
     services: reactive[list[Service]] = reactive(list, always_update=True)
@@ -51,6 +50,7 @@ class ServiceList(Static):
         table.add_column("HEALTH")
         table.add_column("CPU")
         table.add_column("MEM")
+        table.add_column("IMAGE")
         table.add_column("DEPLOYMENT")
 
         # Mark columns as ready
@@ -109,6 +109,7 @@ class ServiceList(Static):
                 health_styled,
                 service.cpu_display,
                 service.memory_display,
+                service.image_display,
                 service.deployment_status,
                 key=service.name,
             )
@@ -146,11 +147,6 @@ class ServiceList(Static):
             # Fallback: use cursor row index
             if table.cursor_row < len(self.services):
                 self.post_message(ServiceSelected(self.services[table.cursor_row]))
-
-    def action_copy_url(self) -> None:
-        """Copy console URL for selected service."""
-        # This will be handled by the app
-        pass
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row double-click selection."""

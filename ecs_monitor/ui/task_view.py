@@ -24,7 +24,6 @@ class ServiceDetailView(Static):
 
     BINDINGS = [
         Binding("escape", "go_back", "Back"),
-        Binding("c", "copy_url", "Copy Console URL"),
     ]
 
     service: reactive[Service | None] = reactive(None)
@@ -33,7 +32,6 @@ class ServiceDetailView(Static):
     def compose(self) -> ComposeResult:
         """Compose the service detail layout."""
         yield Static(id="service-header")
-        yield Static(id="deployments-section")
         yield Static("[bold]Tasks & Containers[/bold]", id="tasks-title")
         yield DataTable(id="tasks-table")
 
@@ -60,7 +58,6 @@ class ServiceDetailView(Static):
         # Now that columns are set up, update the view
         # This handles the case where service was set before mount completed
         self._update_header()
-        self._update_deployments()
         self._update_table()
 
         # Focus the table so it's immediately interactive
@@ -69,7 +66,6 @@ class ServiceDetailView(Static):
     def watch_service(self, service: Service | None) -> None:
         """Update display when service changes."""
         self._update_header()
-        self._update_deployments()
         self._update_table()
 
     def _update_header(self) -> None:
@@ -93,29 +89,6 @@ class ServiceDetailView(Static):
             f"Desired: {s.desired_count}   Running: {s.running_count}\n"
             f"Task Definition: {s.task_definition}"
         )
-
-    def _update_deployments(self) -> None:
-        """Update the deployments section."""
-        if not self._columns_ready:
-            return
-
-        try:
-            section = self.query_one("#deployments-section", Static)
-        except Exception:
-            return
-
-        if self.service is None or not self.service.deployments:
-            section.update("")
-            return
-
-        lines = ["[bold]Deployments:[/bold]"]
-        for dep in self.service.deployments:
-            status_display = dep.display_status
-            lines.append(
-                f"  {dep.status:<10} - {status_display:<14} - {dep.task_definition}"
-            )
-
-        section.update("\n".join(lines))
 
     def _update_table(self) -> None:
         """Update the tasks table with containers."""
@@ -202,24 +175,18 @@ class ServiceDetailView(Static):
 
     def _style_task_status(self, status: str) -> str:
         """Style task status with color."""
-        short_status = status[:4] if len(status) > 4 else status
         if status == "RUNNING":
-            return f"[green]{short_status}[/green]"
+            return f"[green]{status}[/green]"
         elif status == "PENDING":
-            return f"[yellow]{short_status}[/yellow]"
+            return f"[yellow]{status}[/yellow]"
         elif status == "STOPPED":
-            return f"[red]{short_status}[/red]"
+            return f"[red]{status}[/red]"
         else:
-            return f"[dim]{short_status}[/dim]"
+            return f"[dim]{status}[/dim]"
 
     def action_go_back(self) -> None:
         """Handle going back to service list."""
         self.post_message(TaskViewBack())
-
-    def action_copy_url(self) -> None:
-        """Copy console URL for selected item."""
-        # This will be handled by the app
-        pass
 
     def get_selected_task_and_container(self) -> tuple[Task | None, Container | None]:
         """Get the currently selected task and container (if any)."""

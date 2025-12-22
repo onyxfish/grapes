@@ -111,6 +111,21 @@ class ECSFetcher:
         self._report_progress(f"Found {len(task_arns)} tasks, fetching details...")
         tasks_by_service = self._describe_tasks_batched(cluster_name, task_arns)
 
+        # Collect service task definition ARNs for image lookup
+        service_task_def_arns = set()
+        for service_data in services:
+            task_def_arn = service_data.get("taskDefinition", "")
+            if task_def_arn and self._task_def_cache.get(task_def_arn) is None:
+                service_task_def_arns.add(task_def_arn)
+
+        # Fetch any missing task definitions for services
+        if service_task_def_arns:
+            self._report_progress(
+                f"Fetching {len(service_task_def_arns)} service task definitions..."
+            )
+            for task_def_arn in service_task_def_arns:
+                self._describe_task_definition(task_def_arn)
+
         # Build service objects with tasks
         service_objects = []
         for service_data in services:
@@ -279,6 +294,17 @@ class ECSFetcher:
             )
             deployments.append(deployment)
 
+        # Extract container images from task definition
+        images = []
+        task_def_arn = service_data.get("taskDefinition", "")
+        if task_def_arn:
+            task_def = self._task_def_cache.get(task_def_arn)
+            if task_def:
+                for container_def in task_def.get("containerDefinitions", []):
+                    image = container_def.get("image")
+                    if image:
+                        images.append(image)
+
         return Service(
             name=service_data.get("serviceName", ""),
             arn=service_data.get("serviceArn", ""),
@@ -290,6 +316,7 @@ class ECSFetcher:
                 service_data.get("taskDefinition", "")
             ),
             deployments=deployments,
+            images=images,
         )
 
     def _build_task(self, task_data: dict, task_defs: dict[str, dict]) -> Task:
