@@ -24,7 +24,25 @@ A single-pane TUI (Text User Interface) for monitoring AWS ECS cluster health. B
 
 ## Installation
 
-Using [uv](https://github.com/astral-sh/uv):
+Install from PyPI:
+
+```bash
+pip install grapes-ecs
+```
+
+Or using [uv](https://github.com/astral-sh/uv):
+
+```bash
+uv tool install grapes-ecs
+```
+
+Then run:
+
+```bash
+grapes
+```
+
+### Development Installation
 
 ```bash
 # Clone the repository
@@ -36,13 +54,6 @@ uv sync
 
 # Run the application
 uv run grapes
-```
-
-Or install with pip:
-
-```bash
-pip install -e .
-grapes
 ```
 
 ## Configuration

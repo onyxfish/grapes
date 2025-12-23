@@ -47,13 +47,13 @@ def parse_args() -> argparse.Namespace:
         Parsed arguments namespace
     """
     parser = argparse.ArgumentParser(
-        description="ECS Monitor - Single pane TUI for monitoring AWS ECS cluster health",
+        description="Grapes - Single pane TUI for monitoring AWS ECS cluster health",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  ecs-monitor                    # Use config.toml in current directory
-  ecs-monitor -c my-config.toml  # Use specific config file
-  ecs-monitor -v                 # Enable verbose logging
+  grapes                    # Use config.toml in current directory
+  grapes -c my-config.toml  # Use specific config file
+  grapes -v                 # Enable verbose logging
 
 Configuration:
   Create a config.toml file with your cluster settings:
@@ -94,7 +94,7 @@ Configuration:
 
 def print_status(message: str) -> None:
     """Print a status message to stderr."""
-    print(f"[ecs-monitor] {message}", file=sys.stderr)
+    print(f"[grapes] {message}", file=sys.stderr)
 
 
 def run_debug_fetch(config) -> bool:
