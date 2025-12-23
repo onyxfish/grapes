@@ -59,7 +59,7 @@ Configuration:
   Create a config.toml file with your cluster settings:
 
   [cluster]
-  name = "my-cluster"
+  name = "my-cluster"  # optional - if omitted, you'll select from a list
   region = "us-east-1"
   profile = "default"  # optional
 
@@ -110,7 +110,10 @@ def run_debug_fetch(config) -> bool:
     from ecs_monitor.aws.fetcher import ECSFetcher
     from ecs_monitor.aws.metrics import MetricsFetcher
 
-    print_status(f"Testing connection to cluster: {config.cluster.name}")
+    if config.cluster.name:
+        print_status(f"Testing connection to cluster: {config.cluster.name}")
+    else:
+        print_status("Testing connection (no cluster specified, will list clusters)")
     print_status(f"Region: {config.cluster.region}")
     if config.cluster.profile:
         print_status(f"Profile: {config.cluster.profile}")
@@ -125,6 +128,21 @@ def run_debug_fetch(config) -> bool:
             task_def_cache_ttl=config.refresh.task_definition_interval,
             progress_callback=print_status,
         )
+
+        # If no cluster name specified, list clusters
+        if config.cluster.name is None:
+            print_status("Listing clusters...")
+            clusters = fetcher.list_clusters()
+            print_status(f"Found {len(clusters)} clusters:")
+            for cluster in clusters:
+                print_status(
+                    f"  {cluster.name}: {cluster.status} "
+                    f"(services={cluster.active_services_count}, "
+                    f"tasks={cluster.running_tasks_count})"
+                )
+            print_status("")
+            print_status("DEBUG FETCH COMPLETE - Cluster listing successful")
+            return True
 
         print_status("Creating metrics fetcher...")
         metrics_fetcher = MetricsFetcher(clients, progress_callback=print_status)

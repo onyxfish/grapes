@@ -9,7 +9,7 @@ from pathlib import Path
 class ClusterConfig:
     """Cluster configuration."""
 
-    name: str
+    name: str | None  # Optional - if None, user selects from list
     region: str
     profile: str | None = None
 
@@ -65,13 +65,11 @@ def load_config(config_path: str | Path) -> Config:
 
     cluster_data = data["cluster"]
 
-    if "name" not in cluster_data:
-        raise ConfigError("Missing required 'name' in [cluster] section")
     if "region" not in cluster_data:
         raise ConfigError("Missing required 'region' in [cluster] section")
 
     cluster_config = ClusterConfig(
-        name=cluster_data["name"],
+        name=cluster_data.get("name"),  # Optional - if None, user selects from list
         region=cluster_data["region"],
         profile=cluster_data.get("profile"),
     )

@@ -18,6 +18,12 @@ class Cluster:
 
     services: list[Service] = field(default_factory=list)
 
+    # Cluster-level counts (from describe_clusters with STATISTICS)
+    active_services_count: int = 0
+    running_tasks_count: int = 0
+    pending_tasks_count: int = 0
+    registered_container_instances_count: int = 0
+
     # Metadata
     insights_enabled: bool = False
     last_updated: datetime | None = None

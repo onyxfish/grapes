@@ -78,4 +78,19 @@ class AWSClients:
         self.ecs = create_ecs_client(cluster_config)
         self.cloudwatch = create_cloudwatch_client(cluster_config)
         self.region = cluster_config.region
-        self.cluster_name = cluster_config.name
+        self._cluster_name = cluster_config.name
+
+    @property
+    def cluster_name(self) -> str:
+        """Get the current cluster name."""
+        if self._cluster_name is None:
+            raise ValueError("Cluster name not set. Call set_cluster_name() first.")
+        return self._cluster_name
+
+    def set_cluster_name(self, name: str) -> None:
+        """Set the cluster name.
+
+        Args:
+            name: Cluster name to use
+        """
+        self._cluster_name = name

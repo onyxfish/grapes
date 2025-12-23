@@ -84,6 +84,72 @@ class ECSFetcher:
         """Set or clear the progress callback."""
         self._progress_callback = callback
 
+    def list_clusters(self) -> list[Cluster]:
+        """List all ECS clusters with basic information.
+
+        Returns:
+            List of Cluster objects with basic info (no services/tasks)
+        """
+        self._report_progress("Listing clusters...")
+        cluster_arns = self._list_cluster_arns()
+
+        if not cluster_arns:
+            return []
+
+        self._report_progress(
+            f"Found {len(cluster_arns)} clusters, fetching details..."
+        )
+        clusters = self._describe_clusters(cluster_arns)
+
+        return clusters
+
+    def _list_cluster_arns(self) -> list[str]:
+        """List all cluster ARNs."""
+        cluster_arns = []
+        paginator = self.clients.ecs.get_paginator("list_clusters")
+
+        for page in paginator.paginate():
+            cluster_arns.extend(page.get("clusterArns", []))
+
+        return cluster_arns
+
+    def _describe_clusters(self, cluster_arns: list[str]) -> list[Cluster]:
+        """Describe multiple clusters.
+
+        Args:
+            cluster_arns: List of cluster ARNs to describe
+
+        Returns:
+            List of Cluster objects with basic info
+        """
+        if not cluster_arns:
+            return []
+
+        # ECS allows up to 100 clusters per describe call
+        response = self.clients.ecs.describe_clusters(
+            clusters=cluster_arns,
+            include=["STATISTICS"],
+        )
+
+        clusters = []
+        for cluster_data in response.get("clusters", []):
+            cluster = Cluster(
+                name=cluster_data.get("clusterName", ""),
+                arn=cluster_data.get("clusterArn", ""),
+                region=self.clients.region,
+                status=cluster_data.get("status", "UNKNOWN"),
+                services=[],  # We don't fetch services for the list view
+                active_services_count=cluster_data.get("activeServicesCount", 0),
+                running_tasks_count=cluster_data.get("runningTasksCount", 0),
+                pending_tasks_count=cluster_data.get("pendingTasksCount", 0),
+                registered_container_instances_count=cluster_data.get(
+                    "registeredContainerInstancesCount", 0
+                ),
+            )
+            clusters.append(cluster)
+
+        return clusters
+
     def fetch_cluster_state(self) -> Cluster:
         """Fetch complete cluster state.
 

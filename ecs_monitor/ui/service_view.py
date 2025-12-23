@@ -58,6 +58,7 @@ class ServiceList(Static):
         table.add_column("HEALTH")
         table.add_column("CPU")
         table.add_column("MEM")
+        table.add_column("TASK DEF")
         table.add_column("IMAGE")
         table.add_column("DEPLOYMENT")
 
@@ -131,6 +132,7 @@ class ServiceList(Static):
                 health_styled,
                 service.cpu_display,
                 service.memory_display,
+                service.task_definition,
                 service.image_display,
                 service.deployment_status,
                 key=service.name,
@@ -172,8 +174,7 @@ class ServiceList(Static):
 
     def action_deselect_service(self) -> None:
         """Handle service deselection (Escape key)."""
-        if self.selected_service_name is not None:
-            self.post_message(ServiceDeselected())
+        self.post_message(ServiceDeselected())
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row double-click selection."""

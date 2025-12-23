@@ -15,7 +15,8 @@ from ecs_monitor.models import (
     Task,
 )
 from ecs_monitor.ui.app import ECSMonitorApp
-from ecs_monitor.ui.cluster_view import ClusterHeader, LoadingScreen
+from ecs_monitor.ui.cluster_view import LoadingScreen
+from ecs_monitor.ui.cluster_list_view import ClusterList
 
 
 def create_test_config() -> Config:
@@ -23,6 +24,21 @@ def create_test_config() -> Config:
     return Config(
         cluster=ClusterConfig(
             name="test-cluster",
+            region="us-east-1",
+            profile=None,
+        ),
+        refresh=RefreshConfig(
+            interval=30,
+            task_definition_interval=300,
+        ),
+    )
+
+
+def create_test_config_no_cluster() -> Config:
+    """Create a test configuration without a specific cluster."""
+    return Config(
+        cluster=ClusterConfig(
+            name=None,
             region="us-east-1",
             profile=None,
         ),
@@ -98,6 +114,7 @@ class TestECSMonitorApp:
             with patch("ecs_monitor.ui.app.ECSFetcher") as mock_fetcher_class:
                 with patch("ecs_monitor.ui.app.MetricsFetcher") as mock_metrics_class:
                     mock_fetcher = MagicMock()
+                    mock_fetcher.list_clusters.return_value = [test_cluster]
                     mock_fetcher.fetch_cluster_state.return_value = test_cluster
                     mock_fetcher_class.return_value = mock_fetcher
 
@@ -107,7 +124,13 @@ class TestECSMonitorApp:
 
                     app = ECSMonitorApp(config)
 
-                    async with app.run_test():
+                    async with app.run_test() as pilot:
+                        # Wait for data to load
+                        for _ in range(10):
+                            await pilot.pause()
+                            if not app.loading:
+                                break
+
                         # After worker completes, loading should be hidden
                         loading = app.query_one("#loading", LoadingScreen)
                         assert loading.display is False
@@ -116,9 +139,9 @@ class TestECSMonitorApp:
                         main_container = app.query_one("#main-container")
                         assert main_container.display is True
 
-                        # Cluster should be loaded
-                        assert app.cluster is not None
-                        assert app.cluster.name == "test-cluster"
+                        # Clusters should be loaded
+                        assert len(app.clusters) > 0
+                        assert app.clusters[0].name == "test-cluster"
 
     @pytest.mark.asyncio
     async def test_app_transitions_to_main_view_after_data_load(self):
@@ -131,6 +154,7 @@ class TestECSMonitorApp:
                 with patch("ecs_monitor.ui.app.MetricsFetcher") as mock_metrics_class:
                     # Set up mocks
                     mock_fetcher = MagicMock()
+                    mock_fetcher.list_clusters.return_value = [test_cluster]
                     mock_fetcher.fetch_cluster_state.return_value = test_cluster
                     mock_fetcher_class.return_value = mock_fetcher
 
@@ -162,8 +186,8 @@ class TestECSMonitorApp:
                             assert main_container.display is True
 
     @pytest.mark.asyncio
-    async def test_app_displays_cluster_header(self):
-        """Test that app displays cluster header after loading."""
+    async def test_app_displays_cluster_list(self):
+        """Test that app displays cluster list after loading."""
         config = create_test_config()
         test_cluster = create_test_cluster()
 
@@ -171,6 +195,7 @@ class TestECSMonitorApp:
             with patch("ecs_monitor.ui.app.ECSFetcher") as mock_fetcher_class:
                 with patch("ecs_monitor.ui.app.MetricsFetcher") as mock_metrics_class:
                     mock_fetcher = MagicMock()
+                    mock_fetcher.list_clusters.return_value = [test_cluster]
                     mock_fetcher.fetch_cluster_state.return_value = test_cluster
                     mock_fetcher_class.return_value = mock_fetcher
 
@@ -184,17 +209,17 @@ class TestECSMonitorApp:
                         # Wait for data to load
                         for _ in range(10):
                             await pilot.pause()
-                            if app.cluster is not None:
+                            if len(app.clusters) > 0:
                                 break
 
-                        if app.cluster is not None:
-                            header = app.query_one("#cluster-header", ClusterHeader)
-                            assert header.cluster is not None
-                            assert header.cluster.name == "test-cluster"
+                        if len(app.clusters) > 0:
+                            cluster_list = app.query_one("#cluster-list", ClusterList)
+                            assert len(cluster_list.clusters) > 0
+                            assert cluster_list.clusters[0].name == "test-cluster"
 
     @pytest.mark.asyncio
-    async def test_app_worker_updates_cluster_header(self):
-        """Test that worker updates cluster header after loading."""
+    async def test_app_auto_selects_configured_cluster(self):
+        """Test that app auto-selects the configured cluster."""
         config = create_test_config()
         test_cluster = create_test_cluster()
 
@@ -202,6 +227,7 @@ class TestECSMonitorApp:
             with patch("ecs_monitor.ui.app.ECSFetcher") as mock_fetcher_class:
                 with patch("ecs_monitor.ui.app.MetricsFetcher") as mock_metrics_class:
                     mock_fetcher = MagicMock()
+                    mock_fetcher.list_clusters.return_value = [test_cluster]
                     mock_fetcher.fetch_cluster_state.return_value = test_cluster
                     mock_fetcher_class.return_value = mock_fetcher
 
@@ -211,11 +237,16 @@ class TestECSMonitorApp:
 
                     app = ECSMonitorApp(config)
 
-                    async with app.run_test():
-                        # After worker completes, cluster header should be updated
-                        header = app.query_one("#cluster-header", ClusterHeader)
-                        assert header.cluster is not None
-                        assert header.cluster.name == "test-cluster"
+                    async with app.run_test() as pilot:
+                        # Wait for data to load and cluster to be selected
+                        for _ in range(15):
+                            await pilot.pause()
+                            if app.selected_cluster is not None:
+                                break
+
+                        # The configured cluster should be auto-selected
+                        assert app.selected_cluster is not None
+                        assert app.selected_cluster.name == "test-cluster"
 
 
 class TestAppWorkerBehavior:
@@ -223,7 +254,7 @@ class TestAppWorkerBehavior:
 
     @pytest.mark.asyncio
     async def test_fetch_cluster_data_method_directly(self):
-        """Test the _fetch_cluster_data method directly."""
+        """Test the _fetch_cluster_data_worker method directly."""
         config = create_test_config()
         test_cluster = create_test_cluster()
 
@@ -241,9 +272,11 @@ class TestAppWorkerBehavior:
                     mock_metrics_class.return_value = mock_metrics
 
                     app = ECSMonitorApp(config)
+                    # Set a selected cluster first
+                    app.selected_cluster = test_cluster
 
                     # Call the fetch method directly (now sync)
-                    result = app._fetch_cluster_data()
+                    result = app._fetch_cluster_data_worker()
 
                     assert result is not None
                     assert result.name == "test-cluster"
@@ -259,6 +292,7 @@ class TestAppWorkerBehavior:
             with patch("ecs_monitor.ui.app.ECSFetcher") as mock_fetcher_class:
                 with patch("ecs_monitor.ui.app.MetricsFetcher") as mock_metrics_class:
                     mock_fetcher = MagicMock()
+                    mock_fetcher.list_clusters.return_value = [test_cluster]
                     mock_fetcher.fetch_cluster_state.return_value = test_cluster
                     mock_fetcher_class.return_value = mock_fetcher
 
@@ -268,8 +302,14 @@ class TestAppWorkerBehavior:
 
                     app = ECSMonitorApp(config)
 
-                    async with app.run_test():
+                    async with app.run_test() as pilot:
+                        # Wait for worker to complete
+                        for _ in range(10):
+                            await pilot.pause()
+                            if not app.loading:
+                                break
+
                         # After worker completes, loading should be False
                         assert app.loading is False
-                        # Cluster should be loaded
-                        assert app.cluster is not None
+                        # Clusters should be loaded
+                        assert len(app.clusters) > 0

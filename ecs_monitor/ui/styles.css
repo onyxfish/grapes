@@ -1,26 +1,8 @@
-/* ECS Monitor Dark Mode Styles */
+/* ECS Monitor Dark Mode Styles - Three Panel Layout */
 
 /* Main app styling */
 Screen {
     background: $surface;
-}
-
-/* Cluster header */
-ClusterHeader {
-    height: auto;
-    padding: 1;
-    background: $panel;
-    border: solid $primary;
-    margin-bottom: 1;
-}
-
-#cluster-info {
-    height: auto;
-}
-
-#insights-warning {
-    height: auto;
-    margin-top: 1;
 }
 
 /* Loading screen */
@@ -40,23 +22,44 @@ LoadingScreen {
     border: solid $primary;
 }
 
-/* Main content container */
-#main-content {
+/* Main container - vertical three-panel layout */
+#main-container {
     height: 1fr;
+    width: 100%;
 }
 
-/* Services container - takes up space, shrinks when tasks visible */
-#services-container {
+/* Three equal-height panels */
+#clusters-panel {
     height: 1fr;
-    min-height: 8;
+    width: 100%;
+    border-bottom: solid $primary;
 }
 
-/* Tasks container - initially hidden, takes space when visible */
-#tasks-container {
+#services-panel {
     height: 1fr;
-    min-height: 8;
-    border-top: solid $primary;
-    margin-top: 1;
+    width: 100%;
+    border-bottom: solid $primary;
+}
+
+#tasks-panel {
+    height: 1fr;
+    width: 100%;
+}
+
+/* Cluster list widget */
+ClusterList {
+    height: 100%;
+}
+
+#clusters-title {
+    height: 1;
+    padding: 0 1;
+    background: $primary;
+    color: $text;
+}
+
+#clusters-table {
+    height: 1fr;
 }
 
 /* Service list */

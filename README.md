@@ -4,6 +4,7 @@ A single-pane TUI (Text User Interface) for monitoring AWS ECS cluster health. B
 
 ## Features
 
+- **Cluster Selection**: View all accessible ECS clusters and select one to monitor
 - **Real-time Monitoring**: View cluster, service, task, and container status at a glance
 - **Health Indicators**: Visual health status (✓ Healthy, ⚠ Warning, ✗ Unhealthy, ? Unknown)
 - **Container Metrics**: CPU and memory utilization from CloudWatch Container Insights
@@ -47,7 +48,7 @@ Create a `config.toml` file in your current directory or at `~/.config/ecs-monit
 
 ```toml
 [cluster]
-name = "my-ecs-cluster"      # Required: ECS cluster name
+name = "my-ecs-cluster"      # Optional: ECS cluster name (if omitted, select from list)
 region = "us-east-1"         # Required: AWS region
 profile = "default"          # Optional: AWS profile name
 
@@ -55,6 +56,8 @@ profile = "default"          # Optional: AWS profile name
 interval = 30                # Optional: API poll interval in seconds (default: 30)
 task_definition_interval = 300  # Optional: Task def cache TTL in seconds (default: 300)
 ```
+
+If you omit the `name` field, ECS Monitor will show a list of all clusters in the region, and you can select one to view.
 
 Run with a specific config file:
 
@@ -67,10 +70,11 @@ ecs-monitor -c /path/to/config.toml
 | Key | Action |
 |-----|--------|
 | ↓/↑ | Navigate list |
-| Enter | View service details |
-| Esc | Go back to service list |
-| C | Copy AWS Console URL to clipboard |
+| Enter | Select cluster / View service details |
+| Esc | Go back (cluster list / service list) |
+| O | Open in AWS Console |
 | R | Force refresh data |
+| D | Toggle debug console |
 | Q | Quit |
 
 ## Required IAM Permissions
@@ -84,6 +88,7 @@ The following IAM permissions are required:
     {
       "Effect": "Allow",
       "Action": [
+        "ecs:ListClusters",
         "ecs:DescribeClusters",
         "ecs:ListServices",
         "ecs:DescribeServices",

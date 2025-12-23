@@ -3,6 +3,8 @@
 import logging
 
 from textual.app import ComposeResult
+from textual.binding import Binding
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import DataTable, Static
 
@@ -11,8 +13,18 @@ from ecs_monitor.models import Service, Task, Container, HealthStatus
 logger = logging.getLogger(__name__)
 
 
+class TaskDeselected(Message):
+    """Message sent when escape is pressed in task list."""
+
+    pass
+
+
 class TaskList(Static):
     """Widget displaying tasks and containers for a service."""
+
+    BINDINGS = [
+        Binding("escape", "deselect_task", "Back", show=False),
+    ]
 
     service: reactive[Service | None] = reactive(None)
     _columns_ready: bool = False  # Track if columns have been set up
@@ -182,3 +194,8 @@ class TaskList(Static):
             pass
 
         return None, None
+
+    def action_deselect_task(self) -> None:
+        """Handle task deselection (Escape key)."""
+        if self.service is not None:
+            self.post_message(TaskDeselected())

@@ -386,7 +386,6 @@ class TestServiceListRaceConditions:
     @pytest.mark.asyncio
     async def test_service_list_update_table_before_mount(self):
         """Test that _update_table handles being called before mount."""
-        cluster = create_test_cluster()
 
         class DirectUpdateApp(App):
             def compose(self) -> ComposeResult:
@@ -464,7 +463,6 @@ class TestTaskListRaceConditions:
     @pytest.mark.asyncio
     async def test_task_list_update_table_before_mount(self):
         """Test that _update_table handles being called before mount."""
-        cluster = create_test_cluster()
 
         class DirectUpdateApp(App):
             def compose(self) -> ComposeResult:

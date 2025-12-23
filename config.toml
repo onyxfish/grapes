@@ -2,7 +2,6 @@
 # Copy this file and customize for your cluster
 
 [cluster]
-name = "gravity-prod-cluster"      # Required: ECS cluster name
 region = "us-west-2"         # Required: AWS region
 # profile = "default"        # Optional: AWS profile name (uses default credential chain if not set)
 
