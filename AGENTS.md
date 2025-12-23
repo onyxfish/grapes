@@ -4,12 +4,12 @@ Guidelines for AI coding agents working on this project.
 
 ## Project Overview
 
-ECS Monitor is a TUI application for monitoring AWS ECS clusters. See `README.md` for features, installation, and usage.
+Grapes is a TUI application for monitoring AWS ECS clusters. See `README.md` for features, installation, and usage.
 
 ## Architecture
 
 ```
-ecs_monitor/
+grapes/
 ├── aws/           # AWS integration layer
 │   ├── client.py  # boto3 client initialization with connection pooling
 │   ├── fetcher.py # ECS data fetching with batching and caching
@@ -22,6 +22,8 @@ ecs_monitor/
 ├── ui/            # Textual TUI components
 │   ├── app.py     # Main application and state management
 │   ├── cluster_view.py
+│   ├── cluster_list_view.py
+│   ├── cluster_detail_view.py
 │   ├── service_view.py
 │   ├── task_view.py
 │   ├── console_link.py  # AWS Console URL generation
@@ -66,14 +68,15 @@ See `HealthStatus` enum in `models/health.py` for ordering.
 
 ### UI State Management
 
-- Main app state: `AppState` enum (LOADING, CLUSTER_VIEW, SERVICE_VIEW)
+- Main app state: `AppView` enum (LOADING, MAIN)
+- Two-panel layout: clusters (1/3) and detail view (2/3)
 - Reactive properties trigger UI updates automatically
 - `_columns_ready` flag prevents table operations before mount
 
 ## Development Commands
 
 ```bash
-uv run ecs-monitor        # Run the application
+uv run grapes             # Run the application
 uv run pytest             # Run tests
 uv run ruff check .       # Lint code
 uv run ruff format .      # Format code
@@ -125,7 +128,7 @@ async with app.run_test() as pilot:
 1. Create widget class in `ui/` extending `Static` or `Container`
 2. Add compose method returning widget tree
 3. Register in app.py's `compose()` or state transition logic
-4. Add corresponding `AppState` if needed
+4. Add corresponding `AppView` if needed
 5. Add tests in `test_ui.py`
 
 ### Adding a New Configuration Option

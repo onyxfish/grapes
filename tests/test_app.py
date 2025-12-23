@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 
-from ecs_monitor.config import Config, ClusterConfig, RefreshConfig
-from ecs_monitor.models import (
+from grapes.config import Config, ClusterConfig, RefreshConfig
+from grapes.models import (
     Cluster,
     Container,
     Deployment,
@@ -14,9 +14,9 @@ from ecs_monitor.models import (
     Service,
     Task,
 )
-from ecs_monitor.ui.app import ECSMonitorApp
-from ecs_monitor.ui.cluster_view import LoadingScreen
-from ecs_monitor.ui.cluster_list_view import ClusterList
+from grapes.ui.app import ECSMonitorApp
+from grapes.ui.cluster_view import LoadingScreen
+from grapes.ui.cluster_list_view import ClusterList
 
 
 def create_test_config() -> Config:
@@ -110,9 +110,9 @@ class TestECSMonitorApp:
         config = create_test_config()
         test_cluster = create_test_cluster()
 
-        with patch("ecs_monitor.ui.app.AWSClients"):
-            with patch("ecs_monitor.ui.app.ECSFetcher") as mock_fetcher_class:
-                with patch("ecs_monitor.ui.app.MetricsFetcher") as mock_metrics_class:
+        with patch("grapes.ui.app.AWSClients"):
+            with patch("grapes.ui.app.ECSFetcher") as mock_fetcher_class:
+                with patch("grapes.ui.app.MetricsFetcher") as mock_metrics_class:
                     mock_fetcher = MagicMock()
                     mock_fetcher.list_clusters.return_value = [test_cluster]
                     mock_fetcher.fetch_cluster_state.return_value = test_cluster
@@ -149,9 +149,9 @@ class TestECSMonitorApp:
         config = create_test_config()
         test_cluster = create_test_cluster()
 
-        with patch("ecs_monitor.ui.app.AWSClients"):
-            with patch("ecs_monitor.ui.app.ECSFetcher") as mock_fetcher_class:
-                with patch("ecs_monitor.ui.app.MetricsFetcher") as mock_metrics_class:
+        with patch("grapes.ui.app.AWSClients"):
+            with patch("grapes.ui.app.ECSFetcher") as mock_fetcher_class:
+                with patch("grapes.ui.app.MetricsFetcher") as mock_metrics_class:
                     # Set up mocks
                     mock_fetcher = MagicMock()
                     mock_fetcher.list_clusters.return_value = [test_cluster]
@@ -191,9 +191,9 @@ class TestECSMonitorApp:
         config = create_test_config()
         test_cluster = create_test_cluster()
 
-        with patch("ecs_monitor.ui.app.AWSClients"):
-            with patch("ecs_monitor.ui.app.ECSFetcher") as mock_fetcher_class:
-                with patch("ecs_monitor.ui.app.MetricsFetcher") as mock_metrics_class:
+        with patch("grapes.ui.app.AWSClients"):
+            with patch("grapes.ui.app.ECSFetcher") as mock_fetcher_class:
+                with patch("grapes.ui.app.MetricsFetcher") as mock_metrics_class:
                     mock_fetcher = MagicMock()
                     mock_fetcher.list_clusters.return_value = [test_cluster]
                     mock_fetcher.fetch_cluster_state.return_value = test_cluster
@@ -223,9 +223,9 @@ class TestECSMonitorApp:
         config = create_test_config()
         test_cluster = create_test_cluster()
 
-        with patch("ecs_monitor.ui.app.AWSClients"):
-            with patch("ecs_monitor.ui.app.ECSFetcher") as mock_fetcher_class:
-                with patch("ecs_monitor.ui.app.MetricsFetcher") as mock_metrics_class:
+        with patch("grapes.ui.app.AWSClients"):
+            with patch("grapes.ui.app.ECSFetcher") as mock_fetcher_class:
+                with patch("grapes.ui.app.MetricsFetcher") as mock_metrics_class:
                     mock_fetcher = MagicMock()
                     mock_fetcher.list_clusters.return_value = [test_cluster]
                     mock_fetcher.fetch_cluster_state.return_value = test_cluster
@@ -258,9 +258,9 @@ class TestAppWorkerBehavior:
         config = create_test_config()
         test_cluster = create_test_cluster()
 
-        with patch("ecs_monitor.ui.app.AWSClients"):
-            with patch("ecs_monitor.ui.app.ECSFetcher") as mock_fetcher_class:
-                with patch("ecs_monitor.ui.app.MetricsFetcher") as mock_metrics_class:
+        with patch("grapes.ui.app.AWSClients"):
+            with patch("grapes.ui.app.ECSFetcher") as mock_fetcher_class:
+                with patch("grapes.ui.app.MetricsFetcher") as mock_metrics_class:
                     mock_fetcher = MagicMock()
                     mock_fetcher.fetch_cluster_state.return_value = test_cluster
                     mock_fetcher_class.return_value = mock_fetcher
@@ -288,9 +288,9 @@ class TestAppWorkerBehavior:
         config = create_test_config()
         test_cluster = create_test_cluster()
 
-        with patch("ecs_monitor.ui.app.AWSClients"):
-            with patch("ecs_monitor.ui.app.ECSFetcher") as mock_fetcher_class:
-                with patch("ecs_monitor.ui.app.MetricsFetcher") as mock_metrics_class:
+        with patch("grapes.ui.app.AWSClients"):
+            with patch("grapes.ui.app.ECSFetcher") as mock_fetcher_class:
+                with patch("grapes.ui.app.MetricsFetcher") as mock_metrics_class:
                     mock_fetcher = MagicMock()
                     mock_fetcher.list_clusters.return_value = [test_cluster]
                     mock_fetcher.fetch_cluster_state.return_value = test_cluster

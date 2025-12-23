@@ -11,29 +11,29 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Footer
 from textual.worker import Worker, WorkerState
 
-from ecs_monitor.aws.client import AWSClients
-from ecs_monitor.aws.fetcher import ECSFetcher
-from ecs_monitor.aws.metrics import MetricsFetcher
-from ecs_monitor.config import Config
-from ecs_monitor.models import Cluster
-from ecs_monitor.ui.cluster_list_view import (
+from grapes.aws.client import AWSClients
+from grapes.aws.fetcher import ECSFetcher
+from grapes.aws.metrics import MetricsFetcher
+from grapes.config import Config
+from grapes.models import Cluster
+from grapes.ui.cluster_list_view import (
     ClusterList,
     ClusterSelected,
     ClusterDeselected,
 )
-from ecs_monitor.ui.cluster_view import LoadingScreen
-from ecs_monitor.ui.cluster_detail_view import (
+from grapes.ui.cluster_view import LoadingScreen
+from grapes.ui.cluster_detail_view import (
     ClusterDetailView,
     ClusterDetailDeselected,
 )
-from ecs_monitor.ui.console_link import (
+from grapes.ui.console_link import (
     build_cluster_url,
     build_container_url,
     build_service_url,
     build_task_url,
     open_in_browser,
 )
-from ecs_monitor.ui.debug_console import DebugConsole, TextualLogHandler
+from grapes.ui.debug_console import DebugConsole, TextualLogHandler
 
 logger = logging.getLogger(__name__)
 
@@ -279,6 +279,9 @@ class ECSMonitorApp(App):
                 self.clusters = result
                 logger.debug(f"Fetched {len(self.clusters)} clusters")
 
+                # Track if this is initial load
+                is_initial_load = self.loading
+
                 # Transition to main view if still loading
                 if self.loading:
                     self.loading = False
@@ -300,8 +303,9 @@ class ECSMonitorApp(App):
                             self._select_cluster_without_focus(cluster)
                             break
 
-                # Always focus the cluster list on startup
-                self._focus_clusters_panel()
+                # Only focus the cluster list on initial startup
+                if is_initial_load:
+                    self._focus_clusters_panel()
             else:
                 logger.warning("Clusters fetch returned None")
 

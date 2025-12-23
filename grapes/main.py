@@ -5,7 +5,7 @@ import logging
 import sys
 from pathlib import Path
 
-from ecs_monitor.config import ConfigError, get_default_config_path, load_config
+from grapes.config import ConfigError, get_default_config_path, load_config
 
 
 def setup_logging(verbose: bool = False, debug: bool = False, tui: bool = True) -> None:
@@ -106,9 +106,9 @@ def run_debug_fetch(config) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    from ecs_monitor.aws.client import AWSClients
-    from ecs_monitor.aws.fetcher import ECSFetcher
-    from ecs_monitor.aws.metrics import MetricsFetcher
+    from grapes.aws.client import AWSClients
+    from grapes.aws.fetcher import ECSFetcher
+    from grapes.aws.metrics import MetricsFetcher
 
     if config.cluster.name:
         print_status(f"Testing connection to cluster: {config.cluster.name}")
@@ -243,7 +243,7 @@ interval = 30
     # Create and run the application
     try:
         # Import here to avoid loading TUI dependencies for --help
-        from ecs_monitor.ui.app import ECSMonitorApp
+        from grapes.ui.app import ECSMonitorApp
 
         app = ECSMonitorApp(config)
         app.run()

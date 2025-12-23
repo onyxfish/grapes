@@ -4,8 +4,8 @@ import logging
 from collections.abc import Callable
 from datetime import datetime, timezone
 
-from ecs_monitor.aws.client import AWSClients
-from ecs_monitor.models import (
+from grapes.aws.client import AWSClients
+from grapes.models import (
     Cluster,
     Container,
     Deployment,
@@ -13,7 +13,7 @@ from ecs_monitor.models import (
     Service,
     Task,
 )
-from ecs_monitor.utils.ids import extract_task_definition_name
+from grapes.utils.ids import extract_task_definition_name
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,5 @@
 [project]
-name = "ecs-monitor"
+name = "grapes"
 version = "0.1.0"
 description = "Single pane TUI for monitoring AWS ECS cluster health"
 requires-python = ">=3.11"
@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ecs-monitor = "ecs_monitor.main:main"
+grapes = "grapes.main:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Static
 
-from ecs_monitor.models import (
+from grapes.models import (
     Cluster,
     Container,
     Deployment,
@@ -14,9 +14,9 @@ from ecs_monitor.models import (
     Service,
     Task,
 )
-from ecs_monitor.ui.cluster_view import ClusterHeader, LoadingScreen
-from ecs_monitor.ui.service_view import ServiceList
-from ecs_monitor.ui.task_view import TaskList
+from grapes.ui.cluster_view import ClusterHeader, LoadingScreen
+from grapes.ui.service_view import ServiceList
+from grapes.ui.task_view import TaskList
 
 
 def create_test_cluster() -> Cluster:

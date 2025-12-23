@@ -8,7 +8,7 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import DataTable, Static
 
-from ecs_monitor.models import Service, HealthStatus
+from grapes.models import Service, HealthStatus
 
 logger = logging.getLogger(__name__)
 

@@ -5,9 +5,9 @@ from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from ecs_monitor.aws.client import AWSClients
-from ecs_monitor.models import Cluster, Service, Task, Container
-from ecs_monitor.utils.ids import sanitize_metric_id
+from grapes.aws.client import AWSClients
+from grapes.models import Cluster, Service, Task, Container
+from grapes.utils.ids import sanitize_metric_id
 
 logger = logging.getLogger(__name__)
 

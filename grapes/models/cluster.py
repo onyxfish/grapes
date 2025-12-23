@@ -3,8 +3,8 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from ecs_monitor.models.health import HealthStatus
-from ecs_monitor.models.service import Service
+from grapes.models.health import HealthStatus
+from grapes.models.service import Service
 
 
 @dataclass

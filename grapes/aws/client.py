@@ -3,7 +3,7 @@
 import boto3
 from botocore.config import Config as BotoConfig
 
-from ecs_monitor.config import ClusterConfig
+from grapes.config import ClusterConfig
 
 
 def create_ecs_client(cluster_config: ClusterConfig):

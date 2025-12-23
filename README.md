@@ -1,4 +1,7 @@
-# ECS Monitor
+# Grapes
+
+> **Warning**
+> This project is an experiment in AI-assisted development. The code was generated without human review and should not be trusted for production use. That said, Grapes is read-only and makes no modifications to your AWS resources, so there's no harm in trying it!
 
 A single-pane TUI (Text User Interface) for monitoring AWS ECS cluster health. Built with Python and Textual.
 
@@ -26,25 +29,25 @@ Using [uv](https://github.com/astral-sh/uv):
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd ecs-monitor
+cd grapes
 
 # Install dependencies
 uv sync
 
 # Run the application
-uv run ecs-monitor
+uv run grapes
 ```
 
 Or install with pip:
 
 ```bash
 pip install -e .
-ecs-monitor
+grapes
 ```
 
 ## Configuration
 
-Create a `config.toml` file in your current directory or at `~/.config/ecs-monitor/config.toml`:
+Create a `config.toml` file in your current directory or at `~/.config/grapes/config.toml`:
 
 ```toml
 [cluster]
@@ -57,12 +60,12 @@ interval = 30                # Optional: API poll interval in seconds (default: 
 task_definition_interval = 300  # Optional: Task def cache TTL in seconds (default: 300)
 ```
 
-If you omit the `name` field, ECS Monitor will show a list of all clusters in the region, and you can select one to view.
+If you omit the `name` field, Grapes will show a list of all clusters in the region, and you can select one to view.
 
 Run with a specific config file:
 
 ```bash
-ecs-monitor -c /path/to/config.toml
+grapes -c /path/to/config.toml
 ```
 
 ## Keyboard Shortcuts
@@ -121,11 +124,11 @@ aws ecs update-cluster-settings \
   --region us-east-1
 ```
 
-If Container Insights is not enabled, ECS Monitor will display a warning and show `-` for metrics.
+If Container Insights is not enabled, Grapes will display a warning and show `-` for metrics.
 
 ## Health Status
 
-ECS Monitor determines health based on ECS container health checks:
+Grapes determines health based on ECS container health checks:
 
 - **✓ Healthy**: All containers report healthy
 - **⚠ Warning**: Some containers unhealthy or desired != running count

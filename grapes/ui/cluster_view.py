@@ -1,10 +1,10 @@
-"""Cluster header widget for ECS Monitor."""
+"""Cluster header widget for Grapes."""
 
 from textual.app import ComposeResult
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from ecs_monitor.models import Cluster
+from grapes.models import Cluster
 
 
 class ClusterHeader(Static):
@@ -85,7 +85,7 @@ class LoadingScreen(Static):
         try:
             message = self.query_one("#loading-message", Static)
             message.update(
-                f"[bold]ECS Monitor[/bold]\n\n"
+                f"[bold]Grapes[/bold]\n\n"
                 f"Loading cluster data...\n\n"
                 f"[cyan]{self.status_message}[/cyan]"
             )

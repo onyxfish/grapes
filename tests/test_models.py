@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from ecs_monitor.models import (
+from grapes.models import (
     Cluster,
     Container,
     Deployment,

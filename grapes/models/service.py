@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass, field
 
-from ecs_monitor.models.health import HealthStatus
-from ecs_monitor.models.task import Task
+from grapes.models.health import HealthStatus
+from grapes.models.task import Task
 
 
 @dataclass
