@@ -1,4 +1,4 @@
-"""Cluster list widget for ECS Monitor."""
+"""Cluster list widget for Grapes."""
 
 import logging
 
@@ -21,18 +21,11 @@ class ClusterSelected(Message):
         super().__init__()
 
 
-class ClusterDeselected(Message):
-    """Message sent when a cluster is deselected (Escape pressed)."""
-
-    pass
-
-
 class ClusterList(Static):
     """Widget displaying list of ECS clusters."""
 
     BINDINGS = [
         Binding("enter", "select_cluster", "View Cluster"),
-        Binding("escape", "deselect_cluster", "Back", show=False),
     ]
 
     clusters: reactive[list[Cluster]] = reactive(list, always_update=True)
@@ -138,11 +131,6 @@ class ClusterList(Static):
         cluster = self.get_selected_cluster()
         if cluster:
             self.post_message(ClusterSelected(cluster))
-
-    def action_deselect_cluster(self) -> None:
-        """Handle cluster deselection (Escape key)."""
-        if self.selected_cluster_name is not None:
-            self.post_message(ClusterDeselected())
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row double-click selection."""

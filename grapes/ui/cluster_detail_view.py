@@ -3,8 +3,6 @@
 import logging
 
 from textual.app import ComposeResult
-from textual.binding import Binding
-from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import DataTable, Static
 
@@ -13,18 +11,8 @@ from grapes.models import Cluster, Service, Task, Container, HealthStatus
 logger = logging.getLogger(__name__)
 
 
-class ClusterDetailDeselected(Message):
-    """Message sent when escape is pressed in the cluster detail view."""
-
-    pass
-
-
 class ClusterDetailView(Static):
     """Widget displaying services and tasks in a unified hierarchical view."""
-
-    BINDINGS = [
-        Binding("escape", "go_back", "Back", show=False),
-    ]
 
     cluster: reactive[Cluster | None] = reactive(None)
     _columns_ready: bool = False
@@ -271,7 +259,3 @@ class ClusterDetailView(Static):
             pass
 
         return None, None, None
-
-    def action_go_back(self) -> None:
-        """Handle escape key."""
-        self.post_message(ClusterDetailDeselected())

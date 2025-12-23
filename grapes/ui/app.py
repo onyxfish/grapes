@@ -16,16 +16,9 @@ from grapes.aws.fetcher import ECSFetcher
 from grapes.aws.metrics import MetricsFetcher
 from grapes.config import Config
 from grapes.models import Cluster
-from grapes.ui.cluster_list_view import (
-    ClusterList,
-    ClusterSelected,
-    ClusterDeselected,
-)
+from grapes.ui.cluster_list_view import ClusterList, ClusterSelected
 from grapes.ui.cluster_view import LoadingScreen
-from grapes.ui.cluster_detail_view import (
-    ClusterDetailView,
-    ClusterDetailDeselected,
-)
+from grapes.ui.cluster_detail_view import ClusterDetailView
 from grapes.ui.console_link import (
     build_cluster_url,
     build_container_url,
@@ -83,7 +76,7 @@ class ECSMonitorApp(App):
         Binding("r", "refresh", "Refresh"),
         Binding("o", "open_console", "Open in AWS Console"),
         Binding("d", "toggle_debug_console", "Debug"),
-        Binding("escape", "go_back", "Back"),
+        Binding("tab", "switch_panel", "Switch Panel"),
     ]
 
     # Reactive state
@@ -368,10 +361,6 @@ class ECSMonitorApp(App):
         try:
             cluster_list = self.query_one("#cluster-list", ClusterList)
             cluster_list.selected_cluster_name = cluster.name
-            # Only hide cursor if we're changing focus away
-            if change_focus:
-                clusters_table = cluster_list.query_one("#clusters-table", DataTable)
-                clusters_table.show_cursor = False
         except Exception:
             pass
 
@@ -399,9 +388,6 @@ class ECSMonitorApp(App):
         try:
             cluster_list = self.query_one("#cluster-list", ClusterList)
             cluster_list.selected_cluster_name = None
-            # Restore cursor visibility
-            clusters_table = cluster_list.query_one("#clusters-table", DataTable)
-            clusters_table.show_cursor = True
         except Exception:
             pass
 
@@ -439,20 +425,15 @@ class ECSMonitorApp(App):
         """Handle cluster selection from the cluster list."""
         self._select_cluster(event.cluster)
 
-    def on_cluster_deselected(self, event: ClusterDeselected) -> None:
-        """Handle cluster deselection."""
-        self._deselect_cluster()
-
-    def on_cluster_detail_deselected(self, event: ClusterDetailDeselected) -> None:
-        """Handle escape from detail view."""
-        self._deselect_cluster()
-
-    def action_go_back(self) -> None:
-        """Handle escape key to go back through the hierarchy."""
-        if self.focus_panel == FocusPanel.DETAIL and self.selected_cluster is not None:
-            # From detail panel, go back to clusters
-            self._deselect_cluster()
-        # From clusters panel, do nothing (or could quit)
+    def action_switch_panel(self) -> None:
+        """Toggle focus between clusters and detail panels."""
+        if self.focus_panel == FocusPanel.CLUSTERS:
+            # Switch to detail panel (if a cluster is selected)
+            if self.selected_cluster is not None:
+                self._focus_detail_panel()
+        else:
+            # Switch to clusters panel
+            self._focus_clusters_panel()
 
     def action_refresh(self) -> None:
         """Handle manual refresh request."""
