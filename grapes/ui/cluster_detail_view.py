@@ -16,6 +16,12 @@ class ClusterDetailView(Static):
 
     cluster: reactive[Cluster | None] = reactive(None)
     _columns_ready: bool = False
+    _folded_services: set[str]  # Set of folded service names
+
+    def __init__(self, *args, **kwargs) -> None:
+        """Initialize the cluster detail view."""
+        super().__init__(*args, **kwargs)
+        self._folded_services = set()
 
     def compose(self) -> ComposeResult:
         """Compose the cluster detail layout."""
@@ -44,6 +50,9 @@ class ClusterDetailView(Static):
 
     def watch_cluster(self, cluster: Cluster | None) -> None:
         """Update display when cluster changes."""
+        # Reset folded state when cluster changes
+        if cluster is None:
+            self._folded_services = set()
         self._update_table()
 
     def _update_table(self) -> None:
@@ -64,19 +73,24 @@ class ClusterDetailView(Static):
             return
 
         for service in self.cluster.services:
+            is_folded = service.name in self._folded_services
+
             # Add service row
-            self._add_service_row(table, service)
+            self._add_service_row(table, service, is_folded)
 
-            # Add task rows nested under the service
-            for task in service.tasks:
-                self._add_task_row(table, service, task)
+            # Add task rows nested under the service (if not folded)
+            if not is_folded:
+                for task in service.tasks:
+                    self._add_task_row(table, service, task)
 
-                # Add container rows nested under the task (if multiple containers)
-                if len(task.containers) > 1:
-                    for container in task.containers:
-                        self._add_container_row(table, service, task, container)
+                    # Add container rows nested under the task (if multiple containers)
+                    if len(task.containers) > 1:
+                        for container in task.containers:
+                            self._add_container_row(table, service, task, container)
 
-    def _add_service_row(self, table: DataTable, service: Service) -> None:
+    def _add_service_row(
+        self, table: DataTable, service: Service, is_folded: bool
+    ) -> None:
         """Add a service row to the table."""
         health = service.calculate_health()
         health_display = service.health_display
@@ -90,8 +104,9 @@ class ClusterDetailView(Static):
         else:
             status_styled = f"[yellow]{service.status}[/yellow]"
 
-        # Service name with icon
-        name_display = f"[bold]■ {service.name}[/bold]"
+        # Service name with fold indicator
+        fold_icon = "▶" if is_folded else "▼"
+        name_display = f"[bold]{fold_icon} {service.name}[/bold]"
 
         table.add_row(
             name_display,
@@ -199,6 +214,55 @@ class ClusterDetailView(Static):
         else:
             return f"[dim]{status}[/dim]"
 
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Handle Enter key on a row - toggle fold for service rows."""
+        self._toggle_fold_at_cursor()
+
+    def _toggle_fold_at_cursor(self) -> None:
+        """Toggle fold/unfold for the selected service."""
+        if self.cluster is None:
+            return
+
+        try:
+            table = self.query_one("#detail-table", DataTable)
+        except Exception:
+            return
+
+        if table.cursor_row is None:
+            return
+
+        # Find what's at the current cursor position
+        row_index = 0
+        for service in self.cluster.services:
+            if row_index == table.cursor_row:
+                # Cursor is on a service row - toggle fold
+                if service.name in self._folded_services:
+                    self._folded_services.remove(service.name)
+                else:
+                    self._folded_services.add(service.name)
+
+                # Remember cursor row and rebuild table
+                saved_row = table.cursor_row
+                self._update_table()
+
+                # Restore cursor position
+                try:
+                    if table.row_count > 0:
+                        new_row = min(saved_row, table.row_count - 1)
+                        table.move_cursor(row=new_row)
+                except Exception:
+                    pass
+                return
+
+            row_index += 1
+
+            # Skip task/container rows if not folded
+            if service.name not in self._folded_services:
+                for task in service.tasks:
+                    row_index += 1
+                    if len(task.containers) > 1:
+                        row_index += len(task.containers)
+
     def get_selected_item(self) -> tuple[Service | None, Task | None, Container | None]:
         """Get the currently selected service, task, and/or container.
 
@@ -216,46 +280,25 @@ class ClusterDetailView(Static):
         if table.cursor_row is None:
             return None, None, None
 
-        try:
-            row_key = table.get_row_key(table.get_row_at(table.cursor_row))
-            if not row_key or not row_key.value:
-                return None, None, None
+        # Walk through the rows to find what's at the cursor position
+        row_index = 0
+        for service in self.cluster.services:
+            if row_index == table.cursor_row:
+                return service, None, None
+            row_index += 1
 
-            key_str = str(row_key.value)
+            # Check task rows if not folded
+            if service.name not in self._folded_services:
+                for task in service.tasks:
+                    if row_index == table.cursor_row:
+                        return service, task, None
+                    row_index += 1
 
-            # Parse key format
-            if key_str.startswith("svc_"):
-                # Service row
-                service_name = key_str[4:]
-                for service in self.cluster.services:
-                    if service.name == service_name:
-                        return service, None, None
-
-            elif key_str.startswith("task_"):
-                # Task row: task_{service_name}_{task_id}
-                parts = key_str[5:].split("_", 1)
-                if len(parts) == 2:
-                    service_name, task_id = parts
-                    for service in self.cluster.services:
-                        if service.name == service_name:
-                            for task in service.tasks:
-                                if task.id == task_id:
-                                    return service, task, None
-
-            elif key_str.startswith("container_"):
-                # Container row: container_{service_name}_{task_id}_{container_name}
-                parts = key_str[10:].split("_", 2)
-                if len(parts) == 3:
-                    service_name, task_id, container_name = parts
-                    for service in self.cluster.services:
-                        if service.name == service_name:
-                            for task in service.tasks:
-                                if task.id == task_id:
-                                    for container in task.containers:
-                                        if container.name == container_name:
-                                            return service, task, container
-
-        except Exception:
-            pass
+                    # Check container rows for multi-container tasks
+                    if len(task.containers) > 1:
+                        for container in task.containers:
+                            if row_index == table.cursor_row:
+                                return service, task, container
+                            row_index += 1
 
         return None, None, None
