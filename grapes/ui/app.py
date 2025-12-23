@@ -296,16 +296,20 @@ class ECSMonitorApp(App):
                 except Exception:
                     pass
 
-                # If a cluster was configured, auto-select it (but don't change focus)
-                if self._configured_cluster and self.selected_cluster is None:
-                    for cluster in self.clusters:
-                        if cluster.name == self._configured_cluster:
-                            self._select_cluster_without_focus(cluster)
-                            break
-
-                # Only focus the cluster list on initial startup
-                if is_initial_load:
-                    self._focus_clusters_panel()
+                # Auto-select cluster on initial load:
+                # 1. If a cluster was configured, select it
+                # 2. If there's only one cluster, select it automatically
+                if is_initial_load and self.selected_cluster is None:
+                    if self._configured_cluster:
+                        for cluster in self.clusters:
+                            if cluster.name == self._configured_cluster:
+                                self._select_cluster(cluster)
+                                break
+                    elif len(self.clusters) == 1:
+                        self._select_cluster(self.clusters[0])
+                    else:
+                        # Multiple clusters, focus the cluster list
+                        self._focus_clusters_panel()
             else:
                 logger.warning("Clusters fetch returned None")
 
