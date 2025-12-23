@@ -15,13 +15,17 @@ from ecs_monitor.aws.client import AWSClients
 from ecs_monitor.aws.fetcher import ECSFetcher
 from ecs_monitor.aws.metrics import MetricsFetcher
 from ecs_monitor.config import Config
-from ecs_monitor.models import Cluster, Service
+from ecs_monitor.models import Cluster
 from ecs_monitor.ui.cluster_list_view import (
     ClusterList,
     ClusterSelected,
     ClusterDeselected,
 )
 from ecs_monitor.ui.cluster_view import LoadingScreen
+from ecs_monitor.ui.cluster_detail_view import (
+    ClusterDetailView,
+    ClusterDetailDeselected,
+)
 from ecs_monitor.ui.console_link import (
     build_cluster_url,
     build_container_url,
@@ -30,8 +34,6 @@ from ecs_monitor.ui.console_link import (
     open_in_browser,
 )
 from ecs_monitor.ui.debug_console import DebugConsole, TextualLogHandler
-from ecs_monitor.ui.service_view import ServiceList, ServiceSelected, ServiceDeselected
-from ecs_monitor.ui.task_view import TaskList, TaskDeselected
 
 logger = logging.getLogger(__name__)
 
@@ -40,15 +42,14 @@ class AppView(Enum):
     """Application view states."""
 
     LOADING = auto()
-    MAIN = auto()  # Three-panel view
+    MAIN = auto()  # Two-panel view
 
 
 class FocusPanel(Enum):
     """Which panel currently has focus."""
 
     CLUSTERS = auto()
-    SERVICES = auto()
-    TASKS = auto()
+    DETAIL = auto()
 
 
 class ToggleDebugConsoleCommand(Provider):
@@ -90,7 +91,6 @@ class ECSMonitorApp(App):
     focus_panel: reactive[FocusPanel] = reactive(FocusPanel.CLUSTERS)
     clusters: reactive[list[Cluster]] = reactive(list, always_update=True)
     selected_cluster: reactive[Cluster | None] = reactive(None)
-    selected_service: reactive[Service | None] = reactive(None)
     loading: reactive[bool] = reactive(True)
     insights_enabled: reactive[bool] = reactive(False)
     debug_console_visible: reactive[bool] = reactive(False)
@@ -140,21 +140,17 @@ class ECSMonitorApp(App):
         logger.debug(f"Progress: {message}")
 
     def compose(self) -> ComposeResult:
-        """Compose the application layout with three panels."""
+        """Compose the application layout with two panels."""
         yield LoadingScreen(id="loading")
-        # Three-panel vertical layout
+        # Two-panel vertical layout: clusters on top, detail view below
         yield Vertical(
             Container(
                 ClusterList(id="cluster-list"),
                 id="clusters-panel",
             ),
             Container(
-                ServiceList(id="service-list"),
-                id="services-panel",
-            ),
-            Container(
-                TaskList(id="task-list"),
-                id="tasks-panel",
+                ClusterDetailView(id="cluster-detail"),
+                id="detail-panel",
             ),
             id="main-container",
         )
@@ -333,11 +329,8 @@ class ECSMonitorApp(App):
                 # Update selected cluster with fresh data
                 self.selected_cluster = result
 
-                # Update service list
-                self._update_service_list()
-
-                # Update task list if a service is selected
-                self._update_task_list()
+                # Update the detail view
+                self._update_detail_view()
             else:
                 logger.warning("Worker returned None result")
 
@@ -345,43 +338,20 @@ class ECSMonitorApp(App):
             logger.error(f"Worker failed with error: {event.worker.error}")
             self.notify(f"Error loading data: {event.worker.error}", severity="error")
 
-    def _update_service_list(self) -> None:
-        """Update the service list with current cluster data."""
+    def _update_detail_view(self) -> None:
+        """Update the cluster detail view with current cluster data."""
         try:
-            service_list = self.query_one("#service-list", ServiceList)
-            if self.selected_cluster:
-                service_list.services = self.selected_cluster.services
-                # Update selection indicator
-                service_list.selected_service_name = (
-                    self.selected_service.name if self.selected_service else None
-                )
-            else:
-                service_list.services = []
-                service_list.selected_service_name = None
-        except Exception:
-            pass
-
-    def _update_task_list(self) -> None:
-        """Update the task list with current service data."""
-        try:
-            task_list = self.query_one("#task-list", TaskList)
-            if self.selected_service and self.selected_cluster:
-                # Find the updated service in the cluster data
-                for service in self.selected_cluster.services:
-                    if service.name == self.selected_service.name:
-                        self.selected_service = service
-                        task_list.service = service
-                        return
-            task_list.service = self.selected_service
+            detail_view = self.query_one("#cluster-detail", ClusterDetailView)
+            detail_view.cluster = self.selected_cluster
         except Exception:
             pass
 
     def _select_cluster(self, cluster: Cluster, change_focus: bool = True) -> None:
-        """Select a cluster and load its services.
+        """Select a cluster and load its details.
 
         Args:
             cluster: Cluster to select
-            change_focus: Whether to change focus to the services panel
+            change_focus: Whether to change focus to the detail panel
         """
         logger.info(f"Selected cluster: {cluster.name}")
         self.selected_cluster = cluster
@@ -397,17 +367,13 @@ class ECSMonitorApp(App):
         except Exception:
             pass
 
-        # Clear service selection
-        self.selected_service = None
-        self._update_task_list()
-
         # Set the cluster name in AWS clients and fetch data
         self.aws_clients.set_cluster_name(cluster.name)
         self._fetch_cluster_data()
 
-        # Focus services panel if requested
+        # Focus detail panel if requested
         if change_focus:
-            self._focus_services_panel()
+            self._focus_detail_panel()
 
     def _select_cluster_without_focus(self, cluster: Cluster) -> None:
         """Select a cluster without changing focus.
@@ -420,7 +386,6 @@ class ECSMonitorApp(App):
     def _deselect_cluster(self) -> None:
         """Deselect the current cluster."""
         self.selected_cluster = None
-        self.selected_service = None
 
         # Clear cluster selection indicator
         try:
@@ -432,76 +397,15 @@ class ECSMonitorApp(App):
         except Exception:
             pass
 
-        # Clear service list
+        # Clear detail view
         try:
-            service_list = self.query_one("#service-list", ServiceList)
-            service_list.services = []
-            service_list.selected_service_name = None
-        except Exception:
-            pass
-
-        # Clear task list
-        try:
-            task_list = self.query_one("#task-list", TaskList)
-            task_list.service = None
+            detail_view = self.query_one("#cluster-detail", ClusterDetailView)
+            detail_view.cluster = None
         except Exception:
             pass
 
         # Focus clusters panel
         self._focus_clusters_panel()
-
-    def _select_service(self, service: Service) -> None:
-        """Select a service and show its tasks.
-
-        Args:
-            service: Service to select
-        """
-        logger.info(f"Selected service: {service.name}")
-        self.selected_service = service
-
-        # Update service list selection indicator
-        try:
-            service_list = self.query_one("#service-list", ServiceList)
-            service_list.selected_service_name = service.name
-            # Hide cursor in services table
-            services_table = service_list.query_one("#services-table", DataTable)
-            services_table.show_cursor = False
-        except Exception:
-            pass
-
-        # Update task list
-        try:
-            task_list = self.query_one("#task-list", TaskList)
-            task_list.service = service
-        except Exception:
-            pass
-
-        # Focus tasks panel
-        self._focus_tasks_panel()
-
-    def _deselect_service(self) -> None:
-        """Deselect the current service."""
-        self.selected_service = None
-
-        # Clear service selection indicator
-        try:
-            service_list = self.query_one("#service-list", ServiceList)
-            service_list.selected_service_name = None
-            # Restore cursor visibility
-            services_table = service_list.query_one("#services-table", DataTable)
-            services_table.show_cursor = True
-        except Exception:
-            pass
-
-        # Clear task list
-        try:
-            task_list = self.query_one("#task-list", TaskList)
-            task_list.service = None
-        except Exception:
-            pass
-
-        # Focus services panel
-        self._focus_services_panel()
 
     def _focus_clusters_panel(self) -> None:
         """Focus the clusters panel."""
@@ -513,23 +417,13 @@ class ECSMonitorApp(App):
         except Exception:
             pass
 
-    def _focus_services_panel(self) -> None:
-        """Focus the services panel."""
-        self.focus_panel = FocusPanel.SERVICES
+    def _focus_detail_panel(self) -> None:
+        """Focus the detail panel."""
+        self.focus_panel = FocusPanel.DETAIL
         try:
-            service_list = self.query_one("#service-list", ServiceList)
-            services_table = service_list.query_one("#services-table", DataTable)
-            services_table.focus()
-        except Exception:
-            pass
-
-    def _focus_tasks_panel(self) -> None:
-        """Focus the tasks panel."""
-        self.focus_panel = FocusPanel.TASKS
-        try:
-            task_list = self.query_one("#task-list", TaskList)
-            tasks_table = task_list.query_one("#tasks-table", DataTable)
-            tasks_table.focus()
+            detail_view = self.query_one("#cluster-detail", ClusterDetailView)
+            detail_table = detail_view.query_one("#detail-table", DataTable)
+            detail_table.focus()
         except Exception:
             pass
 
@@ -541,33 +435,14 @@ class ECSMonitorApp(App):
         """Handle cluster deselection."""
         self._deselect_cluster()
 
-    def on_service_selected(self, event: ServiceSelected) -> None:
-        """Handle service selection."""
-        self._select_service(event.service)
-
-    def on_service_deselected(self, event: ServiceDeselected) -> None:
-        """Handle service deselection or going back to clusters."""
-        if self.selected_service is not None:
-            # A service was selected, deselect it
-            self._deselect_service()
-        else:
-            # No service selected, go back to clusters
-            self._deselect_cluster()
-
-    def on_task_deselected(self, event: TaskDeselected) -> None:
-        """Handle task deselection (escape from task panel)."""
-        self._deselect_service()
+    def on_cluster_detail_deselected(self, event: ClusterDetailDeselected) -> None:
+        """Handle escape from detail view."""
+        self._deselect_cluster()
 
     def action_go_back(self) -> None:
         """Handle escape key to go back through the hierarchy."""
-        if self.focus_panel == FocusPanel.TASKS and self.selected_service is not None:
-            # From tasks panel, go back to services
-            self._deselect_service()
-        elif (
-            self.focus_panel == FocusPanel.SERVICES
-            and self.selected_cluster is not None
-        ):
-            # From services panel, go back to clusters
+        if self.focus_panel == FocusPanel.DETAIL and self.selected_cluster is not None:
+            # From detail panel, go back to clusters
             self._deselect_cluster()
         # From clusters panel, do nothing (or could quit)
 
@@ -587,35 +462,21 @@ class ECSMonitorApp(App):
         cluster_name = self.selected_cluster.name
         url = None
 
-        if self.selected_service is not None:
-            # Check if there's a selected task in the task list
-            try:
-                task_list = self.query_one("#task-list", TaskList)
-                task, container = task_list.get_selected_task_and_container()
+        # Check what's selected in the detail view
+        try:
+            detail_view = self.query_one("#cluster-detail", ClusterDetailView)
+            service, task, container = detail_view.get_selected_item()
 
-                if container is not None and task is not None:
-                    url = build_container_url(cluster_name, task.id, region)
-                elif task is not None:
-                    url = build_task_url(cluster_name, task.id, region)
-                else:
-                    url = build_service_url(
-                        cluster_name, self.selected_service.name, region
-                    )
-            except Exception:
-                url = build_service_url(
-                    cluster_name, self.selected_service.name, region
-                )
-        else:
-            # Check if there's a highlighted service in the service list
-            try:
-                service_list = self.query_one("#service-list", ServiceList)
-                selected = service_list.get_selected_service()
-                if selected:
-                    url = build_service_url(cluster_name, selected.name, region)
-                else:
-                    url = build_cluster_url(cluster_name, region)
-            except Exception:
+            if container is not None and task is not None:
+                url = build_container_url(cluster_name, task.id, region)
+            elif task is not None:
+                url = build_task_url(cluster_name, task.id, region)
+            elif service is not None:
+                url = build_service_url(cluster_name, service.name, region)
+            else:
                 url = build_cluster_url(cluster_name, region)
+        except Exception:
+            url = build_cluster_url(cluster_name, region)
 
         if url:
             if open_in_browser(url):
