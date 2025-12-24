@@ -356,6 +356,9 @@ class ECSMonitorApp(App):
     def action_toggle_debug_console(self) -> None:
         """Toggle the debug console visibility."""
         self.debug_console_visible = not self.debug_console_visible
+        if self.debug_console_visible:
+            # Close metrics panel when opening debug console (mutually exclusive)
+            self.metrics_panel_visible = False
         logger.debug(f"Debug console visibility: {self.debug_console_visible}")
 
     def watch_debug_console_visible(self, visible: bool) -> None:
@@ -411,11 +414,12 @@ class ECSMonitorApp(App):
             exact_match = True
 
         if exact_match and self.metrics_panel_visible:
-            # Same selection, close the panel
+            # Same selection, close panel
             self.metrics_panel_visible = False
         elif exact_match:
             # Same selection but panel closed, open it
             self.metrics_panel_visible = True
+            self.debug_console_visible = False
             if task is not None:
                 self._fetch_task_metrics_history(task, container)
             elif service is not None:
@@ -424,6 +428,7 @@ class ECSMonitorApp(App):
             # Different selection, switch to it (keep panel open)
             if not self.metrics_panel_visible:
                 self.metrics_panel_visible = True
+                self.debug_console_visible = False
             if task is not None:
                 self._fetch_task_metrics_history(task, container)
             elif service is not None:

@@ -132,7 +132,7 @@ Footer {
 /* Debug console */
 #debug-console {
     dock: bottom;
-    height: 12;
+    height: 14;
     display: none;
     background: $panel;
     border-top: solid $primary;
