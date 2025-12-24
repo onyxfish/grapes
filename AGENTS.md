@@ -21,11 +21,8 @@ grapes/
 │   └── health.py  # HealthStatus enum
 ├── ui/            # Textual TUI components
 │   ├── app.py     # Main application and state management
-│   ├── cluster_view.py
-│   ├── cluster_list_view.py
-│   ├── cluster_detail_view.py
-│   ├── service_view.py
-│   ├── task_view.py
+│   ├── tree_view.py     # Unified hierarchical view (clusters > services > tasks)
+│   ├── cluster_view.py  # Loading screen and cluster header
 │   ├── console_link.py  # AWS Console URL generation
 │   ├── debug_console.py
 │   └── styles.css
@@ -69,9 +66,18 @@ See `HealthStatus` enum in `models/health.py` for ordering.
 ### UI State Management
 
 - Main app state: `AppView` enum (LOADING, MAIN)
-- Two-panel layout: clusters (1/3) and detail view (2/3)
+- Single-panel unified tree layout showing clusters > services > tasks
+- `TreeView` widget manages hierarchical display with fold/unfold
 - Reactive properties trigger UI updates automatically
 - `_columns_ready` flag prevents table operations before mount
+- `_row_map` tracks row types for navigation
+
+### Tree View Navigation
+
+- Enter key: Toggle fold/unfold on clusters and services, or load cluster data
+- Tab key: Jump to next sibling of same type (cluster-to-cluster, service-to-service)
+- Shift+Tab: Jump to previous sibling of same type
+- Up/Down: Standard row navigation
 
 ## Development Commands
 
@@ -140,7 +146,6 @@ async with app.run_test() as pilot:
 
 ## Known Limitations
 
-- Single cluster monitoring only (no multi-cluster support)
 - No filtering or search functionality
 - Metrics are current values only (no historical trends)
 - boto3 is synchronous (runs in workers, not true async)

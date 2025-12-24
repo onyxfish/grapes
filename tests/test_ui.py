@@ -15,8 +15,7 @@ from grapes.models import (
     Task,
 )
 from grapes.ui.cluster_view import ClusterHeader, LoadingScreen
-from grapes.ui.service_view import ServiceList
-from grapes.ui.task_view import TaskList
+from grapes.ui.tree_view import TreeView, RowType
 
 
 def create_test_cluster() -> Cluster:
@@ -129,6 +128,18 @@ def create_test_cluster() -> Cluster:
     )
 
 
+def create_second_test_cluster() -> Cluster:
+    """Create a second test cluster for multi-cluster tests."""
+    return Cluster(
+        name="prod-cluster",
+        arn="arn:aws:ecs:us-east-1:123456789:cluster/prod-cluster",
+        region="us-east-1",
+        status="ACTIVE",
+        last_updated=datetime.now(timezone.utc),
+        services=[],
+    )
+
+
 class TestClusterHeaderWidget:
     """Tests for ClusterHeader widget."""
 
@@ -214,263 +225,213 @@ class TestLoadingScreenWidget:
             assert loading.status_message == "Fetching services..."
 
 
-class TestServiceListWidget:
-    """Tests for ServiceList widget."""
+class TestTreeViewWidget:
+    """Tests for TreeView widget."""
 
-    class ServiceListApp(App):
-        """Test app for ServiceList."""
+    class TreeViewApp(App):
+        """Test app for TreeView."""
 
-        def __init__(self, services: list[Service] | None = None):
+        def __init__(self, clusters: list[Cluster] | None = None):
             super().__init__()
-            self._services = services or []
+            self._clusters = clusters or []
 
         def compose(self) -> ComposeResult:
-            yield ServiceList(id="service-list")
+            yield TreeView(id="tree-view")
 
         def on_mount(self) -> None:
-            service_list = self.query_one("#service-list", ServiceList)
-            service_list.services = self._services
+            tree_view = self.query_one("#tree-view", TreeView)
+            tree_view.clusters = self._clusters
 
     @pytest.mark.asyncio
-    async def test_service_list_displays_services(self):
-        """Test that service list displays services."""
+    async def test_tree_view_displays_clusters(self):
+        """Test that tree view displays clusters."""
         cluster = create_test_cluster()
-        app = self.ServiceListApp(services=cluster.services)
+        app = self.TreeViewApp(clusters=[cluster])
 
         async with app.run_test():
-            service_list = app.query_one("#service-list", ServiceList)
-            assert len(service_list.services) == 2
+            tree_view = app.query_one("#tree-view", TreeView)
+            assert len(tree_view.clusters) == 1
+            assert tree_view.clusters[0].name == "test-cluster"
 
     @pytest.mark.asyncio
-    async def test_service_list_empty(self):
-        """Test service list with no services."""
-        app = self.ServiceListApp(services=[])
+    async def test_tree_view_empty(self):
+        """Test tree view with no clusters."""
+        app = self.TreeViewApp(clusters=[])
 
         async with app.run_test():
-            service_list = app.query_one("#service-list", ServiceList)
-            assert len(service_list.services) == 0
+            tree_view = app.query_one("#tree-view", TreeView)
+            assert len(tree_view.clusters) == 0
+
+    @pytest.mark.asyncio
+    async def test_tree_view_displays_multiple_clusters(self):
+        """Test that tree view displays multiple clusters."""
+        cluster1 = create_test_cluster()
+        cluster2 = create_second_test_cluster()
+        app = self.TreeViewApp(clusters=[cluster1, cluster2])
+
+        async with app.run_test():
+            tree_view = app.query_one("#tree-view", TreeView)
+            assert len(tree_view.clusters) == 2
+
+    @pytest.mark.asyncio
+    async def test_tree_view_update_cluster_data(self):
+        """Test that tree view can update cluster data."""
+        cluster = create_test_cluster()
+        # Create a basic cluster without services for initial display
+        basic_cluster = Cluster(
+            name="test-cluster",
+            arn=cluster.arn,
+            region=cluster.region,
+            status=cluster.status,
+            last_updated=cluster.last_updated,
+            services=[],
+        )
+        app = self.TreeViewApp(clusters=[basic_cluster])
+
+        async with app.run_test():
+            tree_view = app.query_one("#tree-view", TreeView)
+            # Update with full cluster data
+            tree_view.update_cluster_data(cluster)
+            assert "test-cluster" in tree_view._loaded_clusters
+            assert len(tree_view._loaded_clusters["test-cluster"].services) == 2
 
 
-class TestTaskListWidget:
-    """Tests for TaskList widget."""
+class TestTreeViewNavigation:
+    """Tests for TreeView navigation."""
 
-    class TaskListApp(App):
-        """Test app for TaskList."""
+    class TreeViewNavApp(App):
+        """Test app for TreeView navigation."""
 
-        def __init__(self, service: Service | None = None):
+        def __init__(self, clusters: list[Cluster]):
             super().__init__()
-            self._service = service
+            self._clusters = clusters
 
         def compose(self) -> ComposeResult:
-            yield TaskList(id="task-list")
+            yield TreeView(id="tree-view")
 
         def on_mount(self) -> None:
-            task_list = self.query_one("#task-list", TaskList)
-            task_list.service = self._service
+            tree_view = self.query_one("#tree-view", TreeView)
+            tree_view.clusters = self._clusters
+            # Load the cluster data
+            for cluster in self._clusters:
+                tree_view.update_cluster_data(cluster)
 
     @pytest.mark.asyncio
-    async def test_task_list_displays_service(self):
-        """Test that task list displays service information."""
+    async def test_tree_view_get_selected_item(self):
+        """Test that tree view can return the selected item."""
         cluster = create_test_cluster()
-        service = cluster.services[0]
-        app = self.TaskListApp(service=service)
+        app = self.TreeViewNavApp(clusters=[cluster])
 
         async with app.run_test():
-            task_list = app.query_one("#task-list", TaskList)
-            assert task_list.service is not None
-            assert task_list.service.name == "web-service"
+            tree_view = app.query_one("#tree-view", TreeView)
+            # First row should be the cluster
+            selected_cluster, service, task, container = tree_view.get_selected_item()
+            assert selected_cluster is not None
+            assert selected_cluster.name == "test-cluster"
+            assert service is None
+            assert task is None
 
     @pytest.mark.asyncio
-    async def test_task_list_displays_tasks(self):
-        """Test that task list displays tasks."""
+    async def test_tree_view_row_type_detection(self):
+        """Test that tree view correctly identifies row types."""
         cluster = create_test_cluster()
-        service = cluster.services[0]
-        app = self.TaskListApp(service=service)
+        app = self.TreeViewNavApp(clusters=[cluster])
 
         async with app.run_test():
-            task_list = app.query_one("#task-list", TaskList)
-            assert task_list.service is not None
-            assert len(task_list.service.tasks) == 2
+            tree_view = app.query_one("#tree-view", TreeView)
+            # First row should be a cluster
+            row_type = tree_view.get_current_row_type()
+            assert row_type == RowType.CLUSTER
 
 
-class TestServiceListRaceConditions:
-    """Tests for ServiceList race condition handling."""
+class TestTreeViewRaceConditions:
+    """Tests for TreeView race condition handling."""
 
-    class ServiceListWithImmediateSetApp(App):
-        """Test app that sets services immediately after mounting (like the real app)."""
+    class TreeViewWithImmediateSetApp(App):
+        """Test app that sets clusters immediately after mounting."""
 
-        def __init__(self, services: list[Service]):
+        def __init__(self, clusters: list[Cluster]):
             super().__init__()
-            self._services = services
+            self._clusters = clusters
 
         def compose(self) -> ComposeResult:
-            yield ServiceList(id="service-list")
+            yield TreeView(id="tree-view")
 
         def on_mount(self) -> None:
-            # This mimics what the real app does: mount then immediately set services
-            service_list = self.query_one("#service-list", ServiceList)
-            service_list.services = self._services
+            tree_view = self.query_one("#tree-view", TreeView)
+            tree_view.clusters = self._clusters
 
-    class ServiceListWithEarlySetApp(App):
-        """Test app that sets services before mount completes."""
+    class TreeViewWithEarlySetApp(App):
+        """Test app that sets clusters before mount completes."""
 
-        def __init__(self, services: list[Service]):
+        def __init__(self, clusters: list[Cluster]):
             super().__init__()
-            self._services = services
+            self._clusters = clusters
 
         def compose(self) -> ComposeResult:
-            service_list = ServiceList(id="service-list")
-            # Set services immediately during compose, before mount
-            service_list.services = self._services
-            yield service_list
+            tree_view = TreeView(id="tree-view")
+            tree_view.clusters = self._clusters
+            yield tree_view
 
-    class ServiceListMultipleUpdatesApp(App):
-        """Test app that updates services multiple times."""
+    class TreeViewMultipleUpdatesApp(App):
+        """Test app that updates clusters multiple times."""
 
-        def __init__(self, services: list[Service]):
+        def __init__(self, clusters: list[Cluster]):
             super().__init__()
-            self._services = services
+            self._clusters = clusters
 
         def compose(self) -> ComposeResult:
-            yield ServiceList(id="service-list")
+            yield TreeView(id="tree-view")
 
         def on_mount(self) -> None:
-            service_list = self.query_one("#service-list", ServiceList)
-            # Update services multiple times rapidly
-            service_list.services = []
-            service_list.services = self._services[:1] if self._services else []
-            service_list.services = self._services
+            tree_view = self.query_one("#tree-view", TreeView)
+            tree_view.clusters = []
+            tree_view.clusters = self._clusters[:1] if self._clusters else []
+            tree_view.clusters = self._clusters
 
     @pytest.mark.asyncio
-    async def test_service_list_populates_when_set_immediately_after_mount(self):
-        """Test that ServiceList populates correctly when services are set immediately after mounting.
-
-        This test mimics the real app behavior where services are set right after
-        the widget is mounted. This was causing blank tables due to is_mounted being
-        False during on_mount().
-        """
+    async def test_tree_view_populates_when_set_immediately_after_mount(self):
+        """Test that TreeView populates correctly when clusters are set immediately."""
         cluster = create_test_cluster()
-        app = self.ServiceListWithImmediateSetApp(services=cluster.services)
+        app = self.TreeViewWithImmediateSetApp(clusters=[cluster])
 
         async with app.run_test():
-            service_list = app.query_one("#service-list", ServiceList)
-            table = service_list.query_one("#services-table", DataTable)
-            # The table should have rows populated
-            assert table.row_count == 2
-            assert len(service_list.services) == 2
+            tree_view = app.query_one("#tree-view", TreeView)
+            table = tree_view.query_one("#tree-table", DataTable)
+            # The table should have at least the cluster row
+            assert table.row_count >= 1
+            assert len(tree_view.clusters) == 1
 
     @pytest.mark.asyncio
-    async def test_service_list_handles_early_service_assignment(self):
-        """Test that ServiceList handles services being set before mount."""
+    async def test_tree_view_handles_early_cluster_assignment(self):
+        """Test that TreeView handles clusters being set before mount."""
         cluster = create_test_cluster()
-        app = self.ServiceListWithEarlySetApp(services=cluster.services)
+        app = self.TreeViewWithEarlySetApp(clusters=[cluster])
 
-        # This should not raise an error
         async with app.run_test():
-            service_list = app.query_one("#service-list", ServiceList)
-            # After mount completes, services should be accessible
-            assert len(service_list.services) == 2
+            tree_view = app.query_one("#tree-view", TreeView)
+            assert len(tree_view.clusters) == 1
 
     @pytest.mark.asyncio
-    async def test_service_list_handles_multiple_rapid_updates(self):
-        """Test that ServiceList handles multiple rapid service updates."""
+    async def test_tree_view_handles_multiple_rapid_updates(self):
+        """Test that TreeView handles multiple rapid cluster updates."""
         cluster = create_test_cluster()
-        app = self.ServiceListMultipleUpdatesApp(services=cluster.services)
+        app = self.TreeViewMultipleUpdatesApp(clusters=[cluster])
 
-        # This should not raise an error
         async with app.run_test():
-            service_list = app.query_one("#service-list", ServiceList)
-            # Final state should reflect last update
-            assert len(service_list.services) == 2
+            tree_view = app.query_one("#tree-view", TreeView)
+            assert len(tree_view.clusters) == 1
 
     @pytest.mark.asyncio
-    async def test_service_list_update_table_before_mount(self):
+    async def test_tree_view_update_table_before_mount(self):
         """Test that _update_table handles being called before mount."""
 
         class DirectUpdateApp(App):
             def compose(self) -> ComposeResult:
-                yield ServiceList(id="service-list")
+                yield TreeView(id="tree-view")
 
         app = DirectUpdateApp()
 
         async with app.run_test():
-            service_list = app.query_one("#service-list", ServiceList)
-            # Manually call _update_table - should not raise
-            service_list._update_table()
-
-
-class TestTaskListRaceConditions:
-    """Tests for TaskList race condition handling."""
-
-    class TaskListWithEarlySetApp(App):
-        """Test app that sets service before mount completes."""
-
-        def __init__(self, service: Service):
-            super().__init__()
-            self._service = service
-
-        def compose(self) -> ComposeResult:
-            task_list = TaskList(id="task-list")
-            # Set service immediately during compose, before mount
-            task_list.service = self._service
-            yield task_list
-
-    class TaskListMultipleUpdatesApp(App):
-        """Test app that updates service multiple times."""
-
-        def __init__(self, service: Service):
-            super().__init__()
-            self._service = service
-
-        def compose(self) -> ComposeResult:
-            yield TaskList(id="task-list")
-
-        def on_mount(self) -> None:
-            task_list = self.query_one("#task-list", TaskList)
-            # Update service multiple times rapidly
-            task_list.service = None
-            task_list.service = self._service
-            task_list.service = None
-            task_list.service = self._service
-
-    @pytest.mark.asyncio
-    async def test_task_list_handles_early_service_assignment(self):
-        """Test that TaskList handles service being set before mount."""
-        cluster = create_test_cluster()
-        service = cluster.services[0]
-        app = self.TaskListWithEarlySetApp(service=service)
-
-        # This should not raise an error
-        async with app.run_test():
-            task_list = app.query_one("#task-list", TaskList)
-            assert task_list.service is not None
-            assert task_list.service.name == "web-service"
-
-    @pytest.mark.asyncio
-    async def test_task_list_handles_multiple_rapid_updates(self):
-        """Test that TaskList handles multiple rapid service updates."""
-        cluster = create_test_cluster()
-        service = cluster.services[0]
-        app = self.TaskListMultipleUpdatesApp(service=service)
-
-        # This should not raise an error
-        async with app.run_test():
-            task_list = app.query_one("#task-list", TaskList)
-            # Final state should reflect last update
-            assert task_list.service is not None
-            assert task_list.service.name == "web-service"
-
-    @pytest.mark.asyncio
-    async def test_task_list_update_table_before_mount(self):
-        """Test that _update_table handles being called before mount."""
-
-        class DirectUpdateApp(App):
-            def compose(self) -> ComposeResult:
-                yield TaskList(id="task-list")
-
-        app = DirectUpdateApp()
-
-        async with app.run_test():
-            task_list = app.query_one("#task-list", TaskList)
-            # Manually call _update_table - should not raise
-            task_list._update_table()
+            tree_view = app.query_one("#tree-view", TreeView)
+            tree_view._update_table()

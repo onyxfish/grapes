@@ -1,4 +1,4 @@
-/* ECS Monitor Dark Mode Styles - Two Panel Layout */
+/* Grapes ECS Monitor - Single Panel Layout */
 
 /* Main app styling */
 Screen {
@@ -22,54 +22,26 @@ LoadingScreen {
     border: solid $primary;
 }
 
-/* Main container - vertical two-panel layout */
+/* Main container - single panel layout */
 #main-container {
     height: 1fr;
     width: 100%;
 }
 
-/* Clusters panel - 1/3 of screen for cluster selection */
-#clusters-panel {
-    height: 1fr;
-    width: 100%;
-    border-bottom: solid $primary;
-}
-
-/* Detail panel - 2/3 of screen, shows services and tasks */
-#detail-panel {
-    height: 2fr;
-    width: 100%;
-}
-
-/* Cluster list widget */
-ClusterList {
+/* Tree view widget */
+TreeView {
     height: 100%;
+    width: 100%;
 }
 
-#clusters-title {
+#tree-title {
     height: 1;
     padding: 0 1;
     background: $primary;
     color: $text;
 }
 
-#clusters-table {
-    height: 1fr;
-}
-
-/* Cluster detail view */
-ClusterDetailView {
-    height: 100%;
-}
-
-#detail-title {
-    height: 1;
-    padding: 0 1;
-    background: $primary;
-    color: $text;
-}
-
-#detail-table {
+#tree-table {
     height: 1fr;
 }
 
@@ -119,11 +91,6 @@ Footer {
 
 .unknown {
     color: $text-muted;
-}
-
-/* Horizontal containers */
-Horizontal {
-    height: auto;
 }
 
 /* Debug console */

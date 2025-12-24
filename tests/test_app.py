@@ -1,4 +1,4 @@
-"""Tests for the main ECS Monitor application."""
+"""Tests for the main Grapes ECS Monitor application."""
 
 import pytest
 from datetime import datetime, timezone
@@ -16,7 +16,7 @@ from grapes.models import (
 )
 from grapes.ui.app import ECSMonitorApp
 from grapes.ui.cluster_view import LoadingScreen
-from grapes.ui.cluster_list_view import ClusterList
+from grapes.ui.tree_view import TreeView
 
 
 def create_test_config() -> Config:
@@ -186,8 +186,8 @@ class TestECSMonitorApp:
                             assert main_container.display is True
 
     @pytest.mark.asyncio
-    async def test_app_displays_cluster_list(self):
-        """Test that app displays cluster list after loading."""
+    async def test_app_displays_tree_view(self):
+        """Test that app displays tree view after loading."""
         config = create_test_config()
         test_cluster = create_test_cluster()
 
@@ -213,13 +213,13 @@ class TestECSMonitorApp:
                                 break
 
                         if len(app.clusters) > 0:
-                            cluster_list = app.query_one("#cluster-list", ClusterList)
-                            assert len(cluster_list.clusters) > 0
-                            assert cluster_list.clusters[0].name == "test-cluster"
+                            tree_view = app.query_one("#tree-view", TreeView)
+                            assert len(tree_view.clusters) > 0
+                            assert tree_view.clusters[0].name == "test-cluster"
 
     @pytest.mark.asyncio
-    async def test_app_auto_selects_configured_cluster(self):
-        """Test that app auto-selects the configured cluster."""
+    async def test_app_auto_loads_configured_cluster(self):
+        """Test that app auto-loads the configured cluster data."""
         config = create_test_config()
         test_cluster = create_test_cluster()
 
@@ -238,15 +238,16 @@ class TestECSMonitorApp:
                     app = ECSMonitorApp(config)
 
                     async with app.run_test() as pilot:
-                        # Wait for data to load and cluster to be selected
+                        # Wait for data to load
                         for _ in range(15):
                             await pilot.pause()
-                            if app.selected_cluster is not None:
+                            tree_view = app.query_one("#tree-view", TreeView)
+                            if "test-cluster" in tree_view._loaded_clusters:
                                 break
 
-                        # The configured cluster should be auto-selected
-                        assert app.selected_cluster is not None
-                        assert app.selected_cluster.name == "test-cluster"
+                        # The configured cluster data should be auto-loaded
+                        tree_view = app.query_one("#tree-view", TreeView)
+                        assert "test-cluster" in tree_view._loaded_clusters
 
 
 class TestAppWorkerBehavior:
@@ -272,8 +273,6 @@ class TestAppWorkerBehavior:
                     mock_metrics_class.return_value = mock_metrics
 
                     app = ECSMonitorApp(config)
-                    # Set a selected cluster first
-                    app.selected_cluster = test_cluster
 
                     # Call the fetch method directly (now sync)
                     result = app._fetch_cluster_data_worker()
