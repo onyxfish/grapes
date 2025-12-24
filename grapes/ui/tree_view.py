@@ -13,8 +13,6 @@ from grapes.models import Cluster, Service, Task, Container, HealthStatus
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 
 class RowType(Enum):
     """Type of row in the tree view."""
@@ -60,6 +58,7 @@ class TreeView(Static):
     ]
 
     clusters: reactive[list[Cluster]] = reactive(list, always_update=True)
+    refresh_countdown: reactive[int] = reactive(0, always_update=True)
     _columns_ready: bool = False
     _folded_clusters: set[str]  # Set of folded cluster names
     _folded_services: set[str]  # Set of folded service keys (cluster_name:service_name)
@@ -102,6 +101,17 @@ class TreeView(Static):
     def watch_clusters(self, clusters: list[Cluster]) -> None:
         """Update table when clusters change."""
         self._update_table()
+
+    def watch_refresh_countdown(self, countdown: int) -> None:
+        """Update title when countdown changes."""
+        try:
+            title = self.query_one("#tree-title", Static)
+            if countdown > 0:
+                title.update(f"[bold]grapes [{countdown}s][/bold]")
+            else:
+                title.update("[bold]grapes[/bold]")
+        except Exception:
+            pass
 
     def update_cluster_data(self, cluster: Cluster) -> None:
         """Update the data for a specific cluster (services/tasks loaded).

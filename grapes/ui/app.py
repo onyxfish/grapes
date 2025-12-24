@@ -153,6 +153,13 @@ class ECSMonitorApp(App):
         self.query_one("#main-container").display = False
         self.query_one("#loading").display = True
 
+        # Set up countdown timer
+        try:
+            tree_view = self.query_one("#tree-view", TreeView)
+            tree_view.refresh_countdown = self.config.refresh.interval
+        except Exception:
+            pass
+
         # Start initial data fetch
         self._fetch_cluster_list()
 
@@ -162,6 +169,9 @@ class ECSMonitorApp(App):
             self._periodic_refresh,
         )
 
+        # Set up countdown updater (every second)
+        self.set_interval(1, self._update_countdown)
+
     def _periodic_refresh(self) -> None:
         """Periodic refresh callback."""
         logger.debug("Periodic refresh triggered")
@@ -169,6 +179,23 @@ class ECSMonitorApp(App):
             self._fetch_cluster_list()
             # Also refresh any loaded clusters
             self._refresh_loaded_clusters()
+        # Reset countdown
+        try:
+            tree_view = self.query_one("#tree-view", TreeView)
+            tree_view.refresh_countdown = self.config.refresh.interval
+        except Exception:
+            pass
+
+    def _update_countdown(self) -> None:
+        """Update the refresh countdown timer."""
+        if self.loading:
+            return
+        try:
+            tree_view = self.query_one("#tree-view", TreeView)
+            if tree_view.refresh_countdown > 0:
+                tree_view.refresh_countdown -= 1
+        except Exception:
+            pass
 
     def _refresh_loaded_clusters(self) -> None:
         """Refresh data for all loaded clusters."""
