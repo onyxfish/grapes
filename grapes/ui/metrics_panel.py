@@ -1,6 +1,7 @@
 """Metrics panel widget for displaying CPU and memory charts."""
 
 import logging
+import math
 from datetime import datetime
 
 from textual.app import ComposeResult
@@ -329,7 +330,13 @@ class MetricsPanel(Static):
         data_max = max(values)
         if max_val is None:
             max_val = data_max
-        min_val = data_min
+        # Round up max value to next whole number
+        max_val = math.ceil(max_val)
+        # Force y-axis to start at 0 for memory (utilization can't be negative)
+        if unit == "M":
+            min_val = 0
+        else:
+            min_val = min(0, data_min)
 
         if max_val == min_val:
             max_val = min_val + 1  # Avoid division by zero
