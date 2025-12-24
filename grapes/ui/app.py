@@ -372,16 +372,44 @@ class ECSMonitorApp(App):
             )
             return
 
-        # Toggle visibility
-        self.metrics_panel_visible = not self.metrics_panel_visible
+        # If no specific container, use the first one from the task
+        if task is not None and container is None and task.containers:
+            container = task.containers[0]
 
-        # If showing, fetch and display metrics
-        if self.metrics_panel_visible:
+        # Check if the same service/task is selected as currently displayed
+        current_service = getattr(self, "_metrics_service", None)
+        current_task = getattr(self, "_metrics_task", None)
+
+        # Check for exact match on what's currently displayed
+        exact_match = False
+        if task is not None and current_task is not None and task.id == current_task.id:
+            exact_match = True
+        elif (
+            task is None
+            and service is not None
+            and current_service is not None
+            and current_task is None
+            and service.arn == current_service.arn
+        ):
+            exact_match = True
+
+        if exact_match and self.metrics_panel_visible:
+            # Same selection, close the panel
+            self.metrics_panel_visible = False
+        elif exact_match:
+            # Same selection but panel closed, open it
+            self.metrics_panel_visible = True
             if task is not None:
-                # Task or container selected - fetch container metrics
                 self._fetch_task_metrics_history(task, container)
             elif service is not None:
-                # Service selected - fetch service metrics
+                self._fetch_service_metrics_history(service)
+        else:
+            # Different selection, switch to it (keep panel open)
+            if not self.metrics_panel_visible:
+                self.metrics_panel_visible = True
+            if task is not None:
+                self._fetch_task_metrics_history(task, container)
+            elif service is not None:
                 self._fetch_service_metrics_history(service)
 
     def watch_metrics_panel_visible(self, visible: bool) -> None:

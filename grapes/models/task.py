@@ -28,16 +28,35 @@ class Container:
 
     @property
     def cpu_display(self) -> str:
-        """Format CPU as 'usage% / limit' or '- / limit'."""
-        limit_str = str(self.cpu_limit) if self.cpu_limit is not None else "-"
+        """Format CPU as 'usage% / X vCPU' or '- / X vCPU'."""
+        if self.cpu_limit is not None:
+            vcpu = self.cpu_limit / 1024
+            if vcpu == int(vcpu):
+                limit_str = f"{int(vcpu)} vCPU"
+            else:
+                limit_str = f"{vcpu} vCPU"
+        else:
+            limit_str = "-"
+
         if self.cpu_used is not None:
             return f"{self.cpu_used:.0f}% / {limit_str}"
         return f"- / {limit_str}"
 
     @property
     def memory_display(self) -> str:
-        """Format memory as 'usedM / limitM' or '- / limitM'."""
-        limit_str = f"{self.memory_limit}M" if self.memory_limit is not None else "-"
+        """Format memory as 'usedM / X GiB/MiB' or '- / X GiB/MiB'."""
+        if self.memory_limit is not None:
+            if self.memory_limit >= 1024:
+                gib = self.memory_limit / 1024
+                if gib == int(gib):
+                    limit_str = f"{int(gib)} GiB"
+                else:
+                    limit_str = f"{gib} GiB"
+            else:
+                limit_str = f"{self.memory_limit} MiB"
+        else:
+            limit_str = "-"
+
         if self.memory_used is not None:
             return f"{self.memory_used}M / {limit_str}"
         return f"- / {limit_str}"

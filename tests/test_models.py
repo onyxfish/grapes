@@ -57,7 +57,7 @@ class TestContainer:
             cpu_limit=512,
             cpu_used=25.5,
         )
-        assert container.cpu_display == "26% / 512"
+        assert container.cpu_display == "26% / 0.5 vCPU"
 
     def test_cpu_display_without_usage(self):
         """Test CPU display when usage is not available."""
@@ -68,7 +68,7 @@ class TestContainer:
             cpu_limit=512,
             cpu_used=None,
         )
-        assert container.cpu_display == "- / 512"
+        assert container.cpu_display == "- / 0.5 vCPU"
 
     def test_cpu_display_without_limit(self):
         """Test CPU display when limit is not set."""
@@ -90,7 +90,7 @@ class TestContainer:
             memory_limit=1024,
             memory_used=512,
         )
-        assert container.memory_display == "512M / 1024M"
+        assert container.memory_display == "512M / 1 GiB"
 
     def test_memory_display_without_usage(self):
         """Test memory display when usage is not available."""
@@ -101,7 +101,7 @@ class TestContainer:
             memory_limit=1024,
             memory_used=None,
         )
-        assert container.memory_display == "- / 1024M"
+        assert container.memory_display == "- / 1 GiB"
 
 
 class TestTask:
