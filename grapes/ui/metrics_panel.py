@@ -23,6 +23,12 @@ class MetricsPanel(Static):
     cpu_history: reactive[list[float]] = reactive(list, always_update=True)
     memory_history: reactive[list[float]] = reactive(list, always_update=True)
     timestamps: reactive[list[datetime]] = reactive(list, always_update=True)
+    cpu_stats: reactive[tuple[float, float, float]] = reactive(
+        (0, 0, 0), always_update=True
+    )
+    mem_stats: reactive[tuple[float, float, float]] = reactive(
+        (0, 0, 0), always_update=True
+    )
 
     def __init__(self, *args, **kwargs) -> None:
         """Initialize the metrics panel."""
@@ -72,12 +78,22 @@ class MetricsPanel(Static):
         """Update memory chart when history changes."""
         self._update_charts()
 
+    def watch_cpu_stats(self, stats: tuple[float, float, float]) -> None:
+        """Update CPU chart when stats change."""
+        self._update_charts()
+
+    def watch_mem_stats(self, stats: tuple[float, float, float]) -> None:
+        """Update memory chart when stats change."""
+        self._update_charts()
+
     def set_service_metrics_data(
         self,
         service: Service,
         cpu_history: list[float],
         memory_history: list[float],
         timestamps: list[datetime],
+        cpu_stats: tuple[float, float, float],
+        mem_stats: tuple[float, float, float],
     ) -> None:
         """Set metrics data for a service.
 
@@ -86,6 +102,8 @@ class MetricsPanel(Static):
             cpu_history: List of CPU usage values (percentages)
             memory_history: List of memory usage values (percentages)
             timestamps: List of timestamps for the data points
+            cpu_stats: Tuple of (min, max, avg) CPU statistics from CloudWatch
+            mem_stats: Tuple of (min, max, avg) memory statistics from CloudWatch
         """
         self.selected_service = service
         self.selected_task = None
@@ -93,6 +111,8 @@ class MetricsPanel(Static):
         self.cpu_history = cpu_history
         self.memory_history = memory_history
         self.timestamps = timestamps
+        self.cpu_stats = cpu_stats
+        self.mem_stats = mem_stats
         self._update_display()
         self._update_charts()
 
@@ -103,6 +123,8 @@ class MetricsPanel(Static):
         cpu_history: list[float],
         memory_history: list[float],
         timestamps: list[datetime],
+        cpu_stats: tuple[float, float, float],
+        mem_stats: tuple[float, float, float],
     ) -> None:
         """Set metrics data for a task/container.
 
@@ -112,6 +134,8 @@ class MetricsPanel(Static):
             cpu_history: List of CPU usage values (percentages)
             memory_history: List of memory usage values (MiB)
             timestamps: List of timestamps for the data points
+            cpu_stats: Tuple of (min, max, avg) CPU statistics from CloudWatch
+            mem_stats: Tuple of (min, max, avg) memory statistics from CloudWatch
         """
         self.selected_service = None
         self.selected_task = task
@@ -119,6 +143,8 @@ class MetricsPanel(Static):
         self.cpu_history = cpu_history
         self.memory_history = memory_history
         self.timestamps = timestamps
+        self.cpu_stats = cpu_stats
+        self.mem_stats = mem_stats
         self._update_display()
         self._update_charts()
 
@@ -201,10 +227,9 @@ class MetricsPanel(Static):
 
         # Update CPU chart (always percentage, auto-scale for better visibility)
         if self.cpu_history:
-            cpu_current = self.cpu_history[-1]
+            cpu_min, cpu_max, cpu_avg = self.cpu_stats
 
-            cpu_text = f"[bold cyan]CPU[/bold cyan] [bold]{cpu_current:.1f}%[/bold]\n\n"
-            # Auto-scale to show variation in the data
+            cpu_text = f"[bold cyan]CPU[/bold cyan] [dim]Min: {cpu_min:.1f}% / Avg: {cpu_avg:.1f}% / Max: {cpu_max:.1f}%[/dim]\n\n"
             cpu_bar = self._render_ascii_chart(
                 self.cpu_history,
                 timestamps=self.timestamps if self.timestamps else None,
@@ -218,11 +243,11 @@ class MetricsPanel(Static):
 
         # Update Memory chart
         if self.memory_history:
-            mem_current = self.memory_history[-1]
+            mem_min, mem_max, mem_avg = self.mem_stats
 
             if is_service:
                 # Service memory is percentage, auto-scale for better visibility
-                mem_text = f"[bold green]Memory[/bold green] [bold]{mem_current:.1f}%[/bold]\n\n"
+                mem_text = f"[bold green]Memory[/bold green] [dim]Min: {mem_min:.1f}% / Avg: {mem_avg:.1f}% / Max: {mem_max:.1f}%[/dim]\n\n"
                 mem_bar = self._render_ascii_chart(
                     self.memory_history,
                     timestamps=self.timestamps if self.timestamps else None,
@@ -238,7 +263,7 @@ class MetricsPanel(Static):
                     limit_str = f" / {self.selected_container.memory_limit}M"
                     chart_max = float(self.selected_container.memory_limit)
 
-                mem_text = f"[bold green]Memory[/bold green] [bold]{mem_current:.0f}M{limit_str}[/bold]\n\n"
+                mem_text = f"[bold green]Memory[/bold green] [dim]Min: {mem_min:.0f}M / Avg: {mem_avg:.0f}M / Max: {mem_max:.0f}M{limit_str}[/dim]\n\n"
                 mem_bar = self._render_ascii_chart(
                     self.memory_history,
                     timestamps=self.timestamps if self.timestamps else None,

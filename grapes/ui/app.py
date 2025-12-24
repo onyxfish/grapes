@@ -442,10 +442,18 @@ class ECSMonitorApp(App):
         """Worker to fetch service metrics history."""
         service = self._metrics_service
 
-        cpu_history, mem_history, timestamps = (
+        cpu_history, mem_history, timestamps, cpu_stats, mem_stats = (
             self.metrics_fetcher.fetch_service_metrics_history(service.name, minutes=60)
         )
-        return ("service", service, cpu_history, mem_history, timestamps)
+        return (
+            "service",
+            service,
+            cpu_history,
+            mem_history,
+            timestamps,
+            cpu_stats,
+            mem_stats,
+        )
 
     def _fetch_task_metrics_history(self, task, container) -> None:
         """Fetch historical metrics for a task/container.
@@ -477,12 +485,21 @@ class ECSMonitorApp(App):
         task = self._metrics_task
         container = self._metrics_container
 
-        cpu_history, mem_history, timestamps = (
+        cpu_history, mem_history, timestamps, cpu_stats, mem_stats = (
             self.metrics_fetcher.fetch_container_metrics_history(
                 task, container, minutes=60
             )
         )
-        return ("task", task, container, cpu_history, mem_history, timestamps)
+        return (
+            "task",
+            task,
+            container,
+            cpu_history,
+            mem_history,
+            timestamps,
+            cpu_stats,
+            mem_stats,
+        )
 
     def _handle_metrics_history_result(self, event: Worker.StateChanged) -> None:
         """Handle result of metrics history fetch."""
@@ -492,7 +509,15 @@ class ECSMonitorApp(App):
                 result_type = result[0]
 
                 if result_type == "service":
-                    _, service, cpu_history, mem_history, timestamps = result
+                    (
+                        _,
+                        service,
+                        cpu_history,
+                        mem_history,
+                        timestamps,
+                        cpu_stats,
+                        mem_stats,
+                    ) = result
                     logger.info(
                         f"Received service metrics: {len(cpu_history)} CPU, "
                         f"{len(mem_history)} memory data points"
@@ -500,12 +525,26 @@ class ECSMonitorApp(App):
                     try:
                         panel = self.query_one("#metrics-panel", MetricsPanel)
                         panel.set_service_metrics_data(
-                            service, cpu_history, mem_history, timestamps
+                            service,
+                            cpu_history,
+                            mem_history,
+                            timestamps,
+                            cpu_stats,
+                            mem_stats,
                         )
                     except Exception as e:
                         logger.error(f"Failed to update metrics panel: {e}")
                 else:
-                    _, task, container, cpu_history, mem_history, timestamps = result
+                    (
+                        _,
+                        task,
+                        container,
+                        cpu_history,
+                        mem_history,
+                        timestamps,
+                        cpu_stats,
+                        mem_stats,
+                    ) = result
                     logger.info(
                         f"Received task metrics: {len(cpu_history)} CPU, "
                         f"{len(mem_history)} memory data points"
@@ -513,7 +552,13 @@ class ECSMonitorApp(App):
                     try:
                         panel = self.query_one("#metrics-panel", MetricsPanel)
                         panel.set_task_metrics_data(
-                            task, container, cpu_history, mem_history, timestamps
+                            task,
+                            container,
+                            cpu_history,
+                            mem_history,
+                            timestamps,
+                            cpu_stats,
+                            mem_stats,
                         )
                     except Exception as e:
                         logger.error(f"Failed to update metrics panel: {e}")

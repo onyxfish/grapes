@@ -388,22 +388,244 @@ class MetricsFetcher:
         self,
         service_name: str,
         minutes: int = 60,
-    ) -> tuple[list[float], list[float], list[datetime]]:
+    ) -> tuple[
+        list[float],
+        list[float],
+        list[datetime],
+        tuple[float, float, float],
+        tuple[float, float, float],
+    ]:
         """Fetch historical metrics for a service.
 
         Uses AWS/ECS namespace which is always available (no Container Insights needed).
 
         Args:
-            service_name: Name of the service
+            service_name: Name of service
             minutes: Number of minutes of history to fetch
 
         Returns:
-            Tuple of (cpu_history, memory_history, timestamps)
+            Tuple of (cpu_history, memory_history, timestamps, cpu_stats, mem_stats)
+            where stats is (min, max, avg)
         """
         cluster_name = self.clients.cluster_name
         if not cluster_name:
             logger.warning("No cluster name set, cannot fetch metrics history")
-            return [], [], []
+            return [], [], [], (0, 0, 0), (0, 0, 0)
+
+        now = datetime.now(timezone.utc)
+        start_time = now - timedelta(minutes=minutes)
+
+        logger.info(
+            f"Fetching service metrics history for {service_name} "
+            f"from {start_time} to {now}"
+        )
+
+        # Build queries for CPU and memory using AWS/ECS namespace
+        cpu_id = sanitize_metric_id(f"svc_hist_cpu_{service_name}")
+        cpu_min_id = sanitize_metric_id(f"svc_hist_cpu_min_{service_name}")
+        cpu_max_id = sanitize_metric_id(f"svc_hist_cpu_max_{service_name}")
+        mem_id = sanitize_metric_id(f"svc_hist_mem_{service_name}")
+        mem_min_id = sanitize_metric_id(f"svc_hist_mem_min_{service_name}")
+        mem_max_id = sanitize_metric_id(f"svc_hist_mem_max_{service_name}")
+
+        queries = [
+            {
+                "Id": cpu_id,
+                "MetricStat": {
+                    "Metric": {
+                        "Namespace": "AWS/ECS",
+                        "MetricName": "CPUUtilization",
+                        "Dimensions": [
+                            {"Name": "ClusterName", "Value": cluster_name},
+                            {"Name": "ServiceName", "Value": service_name},
+                        ],
+                    },
+                    "Period": 60,  # 1-minute resolution
+                    "Stat": "Average",
+                },
+                "ReturnData": True,
+            },
+            {
+                "Id": cpu_min_id,
+                "MetricStat": {
+                    "Metric": {
+                        "Namespace": "AWS/ECS",
+                        "MetricName": "CPUUtilization",
+                        "Dimensions": [
+                            {"Name": "ClusterName", "Value": cluster_name},
+                            {"Name": "ServiceName", "Value": service_name},
+                        ],
+                    },
+                    "Period": 60,
+                    "Stat": "Minimum",
+                },
+                "ReturnData": True,
+            },
+            {
+                "Id": cpu_max_id,
+                "MetricStat": {
+                    "Metric": {
+                        "Namespace": "AWS/ECS",
+                        "MetricName": "CPUUtilization",
+                        "Dimensions": [
+                            {"Name": "ClusterName", "Value": cluster_name},
+                            {"Name": "ServiceName", "Value": service_name},
+                        ],
+                    },
+                    "Period": 60,
+                    "Stat": "Maximum",
+                },
+                "ReturnData": True,
+            },
+            {
+                "Id": mem_id,
+                "MetricStat": {
+                    "Metric": {
+                        "Namespace": "AWS/ECS",
+                        "MetricName": "MemoryUtilization",
+                        "Dimensions": [
+                            {"Name": "ClusterName", "Value": cluster_name},
+                            {"Name": "ServiceName", "Value": service_name},
+                        ],
+                    },
+                    "Period": 60,
+                    "Stat": "Average",
+                },
+                "ReturnData": True,
+            },
+            {
+                "Id": mem_min_id,
+                "MetricStat": {
+                    "Metric": {
+                        "Namespace": "AWS/ECS",
+                        "MetricName": "MemoryUtilization",
+                        "Dimensions": [
+                            {"Name": "ClusterName", "Value": cluster_name},
+                            {"Name": "ServiceName", "Value": service_name},
+                        ],
+                    },
+                    "Period": 60,
+                    "Stat": "Minimum",
+                },
+                "ReturnData": True,
+            },
+            {
+                "Id": mem_max_id,
+                "MetricStat": {
+                    "Metric": {
+                        "Namespace": "AWS/ECS",
+                        "MetricName": "MemoryUtilization",
+                        "Dimensions": [
+                            {"Name": "ClusterName", "Value": cluster_name},
+                            {"Name": "ServiceName", "Value": service_name},
+                        ],
+                    },
+                    "Period": 60,
+                    "Stat": "Maximum",
+                },
+                "ReturnData": True,
+            },
+        ]
+
+        try:
+            response = self.clients.cloudwatch.get_metric_data(
+                MetricDataQueries=queries,
+                StartTime=start_time,
+                EndTime=now,
+            )
+
+            # Parse results - CloudWatch returns newest first by default
+            cpu_data: dict[datetime, float] = {}
+            mem_data: dict[datetime, float] = {}
+
+            cpu_min: float | None = None
+            cpu_max: float | None = None
+            cpu_avg: float | None = None
+            mem_min: float | None = None
+            mem_max: float | None = None
+            mem_avg: float | None = None
+
+            for result in response.get("MetricDataResults", []):
+                metric_id = result.get("Id", "")
+                values = result.get("Values", [])
+                times = result.get("Timestamps", [])
+
+                logger.debug(
+                    f"Service metric {metric_id}: {len(values)} values, "
+                    f"{len(times)} timestamps"
+                )
+
+                if metric_id == cpu_id:
+                    for ts, val in zip(times, values):
+                        cpu_data[ts] = val
+                elif metric_id == cpu_min_id:
+                    if values:
+                        cpu_min = min(values)
+                elif metric_id == cpu_max_id:
+                    if values:
+                        cpu_max = max(values)
+                elif metric_id == mem_id:
+                    for ts, val in zip(times, values):
+                        mem_data[ts] = val
+                elif metric_id == mem_min_id:
+                    if values:
+                        mem_min = min(values)
+                elif metric_id == mem_max_id:
+                    if values:
+                        mem_max = max(values)
+
+            # Merge timestamps and sort chronologically (oldest first)
+            all_timestamps = sorted(set(cpu_data.keys()) | set(mem_data.keys()))
+
+            if not all_timestamps:
+                logger.warning(f"No metrics data found for service {service_name}")
+                return [], [], [], (0, 0, 0), (0, 0, 0)
+
+            # Build aligned lists
+            cpu_values: list[float] = []
+            mem_values: list[float] = []
+            timestamps: list[datetime] = []
+
+            for ts in all_timestamps:
+                cpu_val = cpu_data.get(ts, 0.0)
+                mem_val = mem_data.get(ts, 0.0)
+
+                timestamps.append(ts)
+                cpu_values.append(cpu_val)
+                mem_values.append(mem_val)
+
+            # Calculate averages if not provided
+            cpu_avg_final = (
+                cpu_avg
+                if cpu_avg is not None
+                else (sum(cpu_values) / len(cpu_values))
+                if cpu_values
+                else 0.0
+            )
+            mem_avg_final = (
+                mem_avg
+                if mem_avg is not None
+                else (sum(mem_values) / len(mem_values))
+                if mem_values
+                else 0.0
+            )
+
+            cpu_stats = (cpu_min or 0.0, cpu_max or 0.0, cpu_avg_final)
+            mem_stats = (mem_min or 0.0, mem_max or 0.0, mem_avg_final)
+
+            logger.info(
+                f"Fetched {len(cpu_values)} historical data points for "
+                f"service {service_name}"
+            )
+
+            return cpu_values, mem_values, timestamps, cpu_stats, mem_stats
+
+        except Exception as e:
+            logger.error(f"Failed to fetch service metrics history: {e}")
+            import traceback
+
+            logger.debug(traceback.format_exc())
+            return [], [], [], (0, 0, 0), (0, 0, 0)
 
         now = datetime.now(timezone.utc)
         start_time = now - timedelta(minutes=minutes)
@@ -519,21 +741,261 @@ class MetricsFetcher:
         task: Task,
         container: Container,
         minutes: int = 60,
-    ) -> tuple[list[float], list[float], list[datetime]]:
+    ) -> tuple[
+        list[float],
+        list[float],
+        list[datetime],
+        tuple[float, float, float],
+        tuple[float, float, float],
+    ]:
         """Fetch historical metrics for a specific container.
 
         Args:
-            task: The task containing the container
+            task: The task containing container
             container: The container to fetch metrics for
             minutes: Number of minutes of history to fetch
 
         Returns:
-            Tuple of (cpu_history, memory_history, timestamps)
+            Tuple of (cpu_history, memory_history, timestamps, cpu_stats, mem_stats)
+            where stats is (min, max, avg)
         """
         cluster_name = self.clients.cluster_name
         if not cluster_name:
             logger.warning("No cluster name set, cannot fetch metrics history")
-            return [], [], []
+            return [], [], [], (0, 0, 0), (0, 0, 0)
+
+        now = datetime.now(timezone.utc)
+        start_time = now - timedelta(minutes=minutes)
+
+        logger.info(
+            f"Fetching metrics history for {task.short_id}/{container.name} "
+            f"from {start_time} to {now}"
+        )
+
+        # Build queries for CPU and memory
+        cpu_id = sanitize_metric_id(f"hist_cpu_{task.short_id}_{container.name}")
+        cpu_min_id = sanitize_metric_id(
+            f"hist_cpu_min_{task.short_id}_{container.name}"
+        )
+        cpu_max_id = sanitize_metric_id(
+            f"hist_cpu_max_{task.short_id}_{container.name}"
+        )
+        mem_id = sanitize_metric_id(f"hist_mem_{task.short_id}_{container.name}")
+        mem_min_id = sanitize_metric_id(
+            f"hist_mem_min_{task.short_id}_{container.name}"
+        )
+        mem_max_id = sanitize_metric_id(
+            f"hist_mem_max_{task.short_id}_{container.name}"
+        )
+
+        queries = [
+            {
+                "Id": cpu_id,
+                "MetricStat": {
+                    "Metric": {
+                        "Namespace": "ECS/ContainerInsights",
+                        "MetricName": "CpuUtilized",
+                        "Dimensions": [
+                            {"Name": "ClusterName", "Value": cluster_name},
+                            {"Name": "TaskId", "Value": task.id},
+                            {"Name": "ContainerName", "Value": container.name},
+                        ],
+                    },
+                    "Period": 60,  # 1-minute resolution
+                    "Stat": "Average",
+                },
+                "ReturnData": True,
+            },
+            {
+                "Id": cpu_min_id,
+                "MetricStat": {
+                    "Metric": {
+                        "Namespace": "ECS/ContainerInsights",
+                        "MetricName": "CpuUtilized",
+                        "Dimensions": [
+                            {"Name": "ClusterName", "Value": cluster_name},
+                            {"Name": "TaskId", "Value": task.id},
+                            {"Name": "ContainerName", "Value": container.name},
+                        ],
+                    },
+                    "Period": 60,
+                    "Stat": "Minimum",
+                },
+                "ReturnData": True,
+            },
+            {
+                "Id": cpu_max_id,
+                "MetricStat": {
+                    "Metric": {
+                        "Namespace": "ECS/ContainerInsights",
+                        "MetricName": "CpuUtilized",
+                        "Dimensions": [
+                            {"Name": "ClusterName", "Value": cluster_name},
+                            {"Name": "TaskId", "Value": task.id},
+                            {"Name": "ContainerName", "Value": container.name},
+                        ],
+                    },
+                    "Period": 60,
+                    "Stat": "Maximum",
+                },
+                "ReturnData": True,
+            },
+            {
+                "Id": mem_id,
+                "MetricStat": {
+                    "Metric": {
+                        "Namespace": "ECS/ContainerInsights",
+                        "MetricName": "MemoryUtilized",
+                        "Dimensions": [
+                            {"Name": "ClusterName", "Value": cluster_name},
+                            {"Name": "TaskId", "Value": task.id},
+                            {"Name": "ContainerName", "Value": container.name},
+                        ],
+                    },
+                    "Period": 60,
+                    "Stat": "Average",
+                },
+                "ReturnData": True,
+            },
+            {
+                "Id": mem_min_id,
+                "MetricStat": {
+                    "Metric": {
+                        "Namespace": "ECS/ContainerInsights",
+                        "MetricName": "MemoryUtilized",
+                        "Dimensions": [
+                            {"Name": "ClusterName", "Value": cluster_name},
+                            {"Name": "TaskId", "Value": task.id},
+                            {"Name": "ContainerName", "Value": container.name},
+                        ],
+                    },
+                    "Period": 60,
+                    "Stat": "Minimum",
+                },
+                "ReturnData": True,
+            },
+            {
+                "Id": mem_max_id,
+                "MetricStat": {
+                    "Metric": {
+                        "Namespace": "ECS/ContainerInsights",
+                        "MetricName": "MemoryUtilized",
+                        "Dimensions": [
+                            {"Name": "ClusterName", "Value": cluster_name},
+                            {"Name": "TaskId", "Value": task.id},
+                            {"Name": "ContainerName", "Value": container.name},
+                        ],
+                    },
+                    "Period": 60,
+                    "Stat": "Maximum",
+                },
+                "ReturnData": True,
+            },
+        ]
+
+        try:
+            response = self.clients.cloudwatch.get_metric_data(
+                MetricDataQueries=queries,
+                StartTime=start_time,
+                EndTime=now,
+            )
+
+            # Parse results - CloudWatch returns newest first by default
+            cpu_data: dict[datetime, float] = {}
+            mem_data: dict[datetime, float] = {}
+
+            cpu_min: float | None = None
+            cpu_max: float | None = None
+            cpu_avg: float | None = None
+            mem_min: float | None = None
+            mem_max: float | None = None
+            mem_avg: float | None = None
+
+            for result in response.get("MetricDataResults", []):
+                metric_id = result.get("Id", "")
+                values = result.get("Values", [])
+                times = result.get("Timestamps", [])
+
+                logger.debug(
+                    f"Metric {metric_id}: {len(values)} values, {len(times)} timestamps"
+                )
+
+                if metric_id == cpu_id:
+                    for ts, val in zip(times, values):
+                        cpu_data[ts] = val
+                elif metric_id == cpu_min_id:
+                    if values:
+                        cpu_min = min(values)
+                elif metric_id == cpu_max_id:
+                    if values:
+                        cpu_max = max(values)
+                elif metric_id == mem_id:
+                    for ts, val in zip(times, values):
+                        mem_data[ts] = val
+                elif metric_id == mem_min_id:
+                    if values:
+                        mem_min = min(values)
+                elif metric_id == mem_max_id:
+                    if values:
+                        mem_max = max(values)
+
+            # Merge timestamps and sort chronologically (oldest first)
+            all_timestamps = sorted(set(cpu_data.keys()) | set(mem_data.keys()))
+
+            if not all_timestamps:
+                logger.warning(
+                    f"No metrics data found for {task.short_id}/{container.name}. "
+                    "Container Insights may not be enabled."
+                )
+                return [], [], [], (0, 0, 0), (0, 0, 0)
+
+            # Build aligned lists
+            cpu_values: list[float] = []
+            mem_values: list[float] = []
+            timestamps: list[datetime] = []
+
+            for ts in all_timestamps:
+                # Only include timestamps where we have both metrics
+                # or use 0 as placeholder if one is missing
+                cpu_val = cpu_data.get(ts, 0.0)
+                mem_val = mem_data.get(ts, 0.0)
+
+                timestamps.append(ts)
+                cpu_values.append(cpu_val)
+                mem_values.append(mem_val)
+
+            # Calculate averages if not provided
+            cpu_avg_final = (
+                cpu_avg
+                if cpu_avg is not None
+                else (sum(cpu_values) / len(cpu_values))
+                if cpu_values
+                else 0.0
+            )
+            mem_avg_final = (
+                mem_avg
+                if mem_avg is not None
+                else (sum(mem_values) / len(mem_values))
+                if mem_values
+                else 0.0
+            )
+
+            cpu_stats = (cpu_min or 0.0, cpu_max or 0.0, cpu_avg_final)
+            mem_stats = (mem_min or 0.0, mem_max or 0.0, mem_avg_final)
+
+            logger.info(
+                f"Fetched {len(cpu_values)} historical data points for "
+                f"{task.short_id}/{container.name}"
+            )
+
+            return cpu_values, mem_values, timestamps, cpu_stats, mem_stats
+
+        except Exception as e:
+            logger.error(f"Failed to fetch container metrics history: {e}")
+            import traceback
+
+            logger.debug(traceback.format_exc())
+            return [], [], [], (0, 0, 0), (0, 0, 0)
 
         now = datetime.now(timezone.utc)
         start_time = now - timedelta(minutes=minutes)
