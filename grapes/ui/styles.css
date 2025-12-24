@@ -93,6 +93,42 @@ Footer {
     color: $text-muted;
 }
 
+/* Metrics panel */
+#metrics-panel {
+    dock: bottom;
+    height: 14;
+    display: none;
+    background: $panel;
+    border-top: solid $primary;
+    padding: 0 1;
+}
+
+#metrics-panel.visible {
+    display: block;
+}
+
+#metrics-title {
+    height: 1;
+    background: $primary;
+    padding: 0 1;
+}
+
+#charts-row {
+    height: 1fr;
+    width: 100%;
+}
+
+.chart-container {
+    width: 1fr;
+    height: 100%;
+    padding: 0 1;
+}
+
+#metrics-status {
+    height: 1;
+    color: $text-muted;
+}
+
 /* Debug console */
 #debug-console {
     dock: bottom;

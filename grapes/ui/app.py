@@ -26,6 +26,7 @@ from grapes.ui.console_link import (
     open_in_browser,
 )
 from grapes.ui.debug_console import DebugConsole, TextualLogHandler
+from grapes.ui.metrics_panel import MetricsPanel
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ class ECSMonitorApp(App):
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
         Binding("o", "open_console", "Open in AWS Console"),
+        Binding("v", "toggle_metrics_panel", "Metrics"),
         Binding("d", "toggle_debug_console", "Debug"),
     ]
 
@@ -76,6 +78,7 @@ class ECSMonitorApp(App):
     loading: reactive[bool] = reactive(True)
     insights_enabled: reactive[bool] = reactive(False)
     debug_console_visible: reactive[bool] = reactive(False)
+    metrics_panel_visible: reactive[bool] = reactive(False)
 
     # Track which cluster is currently being fetched
     _fetching_cluster: str | None = None
@@ -130,6 +133,7 @@ class ECSMonitorApp(App):
             TreeView(id="tree-view"),
             id="main-container",
         )
+        yield MetricsPanel(id="metrics-panel")
         yield DebugConsole(id="debug-console")
         yield Footer()
 
@@ -233,6 +237,11 @@ class ECSMonitorApp(App):
             self._handle_clusters_fetch_result(event)
         elif event.worker.name == "fetch_cluster_data":
             self._handle_cluster_data_result(event)
+        elif event.worker.name in (
+            "fetch_service_metrics_history",
+            "fetch_task_metrics_history",
+        ):
+            self._handle_metrics_history_result(event)
 
     def _handle_clusters_fetch_result(self, event: Worker.StateChanged) -> None:
         """Handle result of clusters list fetch."""
@@ -345,3 +354,149 @@ class ECSMonitorApp(App):
             console.add_class("visible")
         else:
             console.remove_class("visible")
+
+    def action_toggle_metrics_panel(self) -> None:
+        """Toggle the metrics panel visibility and load data if needed."""
+        # Get the currently selected item
+        try:
+            tree_view = self.query_one("#tree-view", TreeView)
+            cluster, service, task, container = tree_view.get_selected_item()
+        except Exception:
+            return
+
+        # Need at least a service to show metrics
+        if service is None and task is None:
+            self.notify(
+                "Select a service, task, or container to view metrics",
+                severity="warning",
+            )
+            return
+
+        # Toggle visibility
+        self.metrics_panel_visible = not self.metrics_panel_visible
+
+        # If showing, fetch and display metrics
+        if self.metrics_panel_visible:
+            if task is not None:
+                # Task or container selected - fetch container metrics
+                self._fetch_task_metrics_history(task, container)
+            elif service is not None:
+                # Service selected - fetch service metrics
+                self._fetch_service_metrics_history(service)
+
+    def watch_metrics_panel_visible(self, visible: bool) -> None:
+        """Update metrics panel visibility when state changes."""
+        try:
+            panel = self.query_one("#metrics-panel", MetricsPanel)
+            if visible:
+                panel.add_class("visible")
+            else:
+                panel.remove_class("visible")
+        except Exception:
+            pass
+
+    def _fetch_service_metrics_history(self, service) -> None:
+        """Fetch historical metrics for a service.
+
+        Args:
+            service: The service to fetch metrics for
+        """
+        self._metrics_service = service
+        self._metrics_task = None
+        self._metrics_container = None
+        self.run_worker(
+            self._fetch_service_metrics_history_worker,
+            name="fetch_service_metrics_history",
+            thread=True,
+        )
+
+    def _fetch_service_metrics_history_worker(self):
+        """Worker to fetch service metrics history."""
+        service = self._metrics_service
+
+        cpu_history, mem_history, timestamps = (
+            self.metrics_fetcher.fetch_service_metrics_history(service.name, minutes=60)
+        )
+        return ("service", service, cpu_history, mem_history, timestamps)
+
+    def _fetch_task_metrics_history(self, task, container) -> None:
+        """Fetch historical metrics for a task/container.
+
+        Args:
+            task: The task to fetch metrics for
+            container: The container (uses first container if None)
+        """
+        # If no specific container, use the first one
+        if container is None and task.containers:
+            container = task.containers[0]
+
+        if container is None:
+            self.notify("No container found for metrics", severity="warning")
+            return
+
+        # Run fetch in a worker to avoid blocking UI
+        self._metrics_service = None
+        self._metrics_task = task
+        self._metrics_container = container
+        self.run_worker(
+            self._fetch_task_metrics_history_worker,
+            name="fetch_task_metrics_history",
+            thread=True,
+        )
+
+    def _fetch_task_metrics_history_worker(self):
+        """Worker to fetch task/container metrics history."""
+        task = self._metrics_task
+        container = self._metrics_container
+
+        cpu_history, mem_history, timestamps = (
+            self.metrics_fetcher.fetch_container_metrics_history(
+                task, container, minutes=60
+            )
+        )
+        return ("task", task, container, cpu_history, mem_history, timestamps)
+
+    def _handle_metrics_history_result(self, event: Worker.StateChanged) -> None:
+        """Handle result of metrics history fetch."""
+        if event.state == WorkerState.SUCCESS:
+            result = event.worker.result
+            if result is not None:
+                result_type = result[0]
+
+                if result_type == "service":
+                    _, service, cpu_history, mem_history, timestamps = result
+                    logger.info(
+                        f"Received service metrics: {len(cpu_history)} CPU, "
+                        f"{len(mem_history)} memory data points"
+                    )
+                    try:
+                        panel = self.query_one("#metrics-panel", MetricsPanel)
+                        panel.set_service_metrics_data(
+                            service, cpu_history, mem_history, timestamps
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to update metrics panel: {e}")
+                else:
+                    _, task, container, cpu_history, mem_history, timestamps = result
+                    logger.info(
+                        f"Received task metrics: {len(cpu_history)} CPU, "
+                        f"{len(mem_history)} memory data points"
+                    )
+                    try:
+                        panel = self.query_one("#metrics-panel", MetricsPanel)
+                        panel.set_task_metrics_data(
+                            task, container, cpu_history, mem_history, timestamps
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to update metrics panel: {e}")
+
+                if not cpu_history and not mem_history:
+                    self.notify(
+                        "No metrics data available.",
+                        severity="warning",
+                    )
+        elif event.state == WorkerState.ERROR:
+            logger.error(f"Metrics history fetch failed: {event.worker.error}")
+            self.notify(
+                f"Failed to fetch metrics: {event.worker.error}", severity="error"
+            )

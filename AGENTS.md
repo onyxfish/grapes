@@ -22,6 +22,7 @@ grapes/
 ├── ui/            # Textual TUI components
 │   ├── app.py     # Main application and state management
 │   ├── tree_view.py     # Unified hierarchical view (clusters > services > tasks)
+│   ├── metrics_panel.py # CPU/memory usage charts for tasks/containers
 │   ├── cluster_view.py  # Loading screen and cluster header
 │   ├── console_link.py  # AWS Console URL generation
 │   ├── debug_console.py
@@ -78,6 +79,7 @@ See `HealthStatus` enum in `models/health.py` for ordering.
 - Tab key: Jump to next sibling of same type (cluster-to-cluster, service-to-service)
 - Shift+Tab: Jump to previous sibling of same type
 - Up/Down: Standard row navigation
+- V key: Show/hide metrics panel with CPU/memory charts for selected service/task/container
 
 ## Development Commands
 
@@ -147,5 +149,4 @@ async with app.run_test() as pilot:
 ## Known Limitations
 
 - No filtering or search functionality
-- Metrics are current values only (no historical trends)
 - boto3 is synchronous (runs in workers, not true async)
