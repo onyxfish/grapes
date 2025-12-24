@@ -164,6 +164,7 @@ class ECSMonitorApp(App):
 
     def _periodic_refresh(self) -> None:
         """Periodic refresh callback."""
+        logger.debug("Periodic refresh triggered")
         if not self.loading and self.current_view == AppView.MAIN:
             self._fetch_cluster_list()
             # Also refresh any loaded clusters
@@ -173,10 +174,12 @@ class ECSMonitorApp(App):
         """Refresh data for all loaded clusters."""
         try:
             tree_view = self.query_one("#tree-view", TreeView)
-            for cluster_name in list(tree_view._loaded_clusters.keys()):
+            cluster_names = list(tree_view._loaded_clusters.keys())
+            logger.debug(f"Refreshing {len(cluster_names)} loaded clusters")
+            for cluster_name in cluster_names:
                 self._fetch_cluster_data(cluster_name)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to refresh loaded clusters: {e}")
 
     def _fetch_cluster_list(self) -> None:
         """Fetch the list of clusters."""
@@ -184,6 +187,7 @@ class ECSMonitorApp(App):
             logger.debug("Refresh already in progress, skipping")
             return
 
+        logger.debug("Starting cluster list fetch")
         self._refresh_worker = self.run_worker(
             self._fetch_clusters_worker,
             name="fetch_clusters",
@@ -208,8 +212,10 @@ class ECSMonitorApp(App):
         """
         # Don't start a new fetch if one is already running for this cluster
         if self._fetching_cluster == cluster_name:
+            logger.debug(f"Already fetching cluster data for {cluster_name}, skipping")
             return
 
+        logger.debug(f"Starting cluster data fetch for: {cluster_name}")
         self._fetching_cluster = cluster_name
         self.aws_clients.set_cluster_name(cluster_name)
 
@@ -306,16 +312,19 @@ class ECSMonitorApp(App):
 
     def on_cluster_selected(self, event: ClusterSelected) -> None:
         """Handle cluster selection from tree view - load its data."""
+        logger.info(f"Cluster selected: {event.cluster.name}")
         self._fetch_cluster_data(event.cluster.name)
 
     def action_refresh(self) -> None:
         """Handle manual refresh request."""
+        logger.info("Manual refresh requested")
         self.notify("Refreshing...")
         self._fetch_cluster_list()
         self._refresh_loaded_clusters()
 
     def action_open_console(self) -> None:
         """Open the appropriate console URL in a browser."""
+        logger.info("Open console requested")
         try:
             tree_view = self.query_one("#tree-view", TreeView)
             cluster, service, task, container = tree_view.get_selected_item()
@@ -337,6 +346,7 @@ class ECSMonitorApp(App):
         else:
             url = build_cluster_url(cluster.name, region)
 
+        logger.debug(f"Opening console URL: {url}")
         if url:
             if open_in_browser(url):
                 self.notify("Opening in browser...")
@@ -346,9 +356,11 @@ class ECSMonitorApp(App):
     def action_toggle_debug_console(self) -> None:
         """Toggle the debug console visibility."""
         self.debug_console_visible = not self.debug_console_visible
+        logger.debug(f"Debug console visibility: {self.debug_console_visible}")
 
     def watch_debug_console_visible(self, visible: bool) -> None:
         """Update debug console visibility when state changes."""
+        logger.debug(f"Setting debug console visible: {visible}")
         console = self.query_one("#debug-console", DebugConsole)
         if visible:
             console.add_class("visible")
@@ -357,11 +369,16 @@ class ECSMonitorApp(App):
 
     def action_toggle_metrics_panel(self) -> None:
         """Toggle the metrics panel visibility and load data if needed."""
+        logger.debug("Toggle metrics panel requested")
         # Get the currently selected item
         try:
             tree_view = self.query_one("#tree-view", TreeView)
             cluster, service, task, container = tree_view.get_selected_item()
+            logger.debug(
+                f"Selected: cluster={cluster.name if cluster else None}, service={service.name if service else None}, task={task.short_id if task else None}"
+            )
         except Exception:
+            logger.warning("Failed to get selected item for metrics panel")
             return
 
         # Need at least a service to show metrics
@@ -414,14 +431,15 @@ class ECSMonitorApp(App):
 
     def watch_metrics_panel_visible(self, visible: bool) -> None:
         """Update metrics panel visibility when state changes."""
+        logger.debug(f"Setting metrics panel visible: {visible}")
         try:
             panel = self.query_one("#metrics-panel", MetricsPanel)
             if visible:
                 panel.add_class("visible")
             else:
                 panel.remove_class("visible")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to toggle metrics panel: {e}")
 
     def _fetch_service_metrics_history(self, service) -> None:
         """Fetch historical metrics for a service.

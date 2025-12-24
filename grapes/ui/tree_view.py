@@ -13,6 +13,8 @@ from grapes.models import Cluster, Service, Task, Container, HealthStatus
 
 logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
+
 
 class RowType(Enum):
     """Type of row in the tree view."""
@@ -372,13 +374,18 @@ class TreeView(Static):
             # Check if cluster data is loaded
             if row_info.cluster.name not in self._loaded_clusters:
                 # Request cluster data load
+                logger.info(f"Loading cluster data: {row_info.cluster.name}")
                 self.post_message(ClusterSelected(row_info.cluster))
             else:
                 # Toggle fold
-                if row_info.cluster.name in self._folded_clusters:
+                was_folded = row_info.cluster.name in self._folded_clusters
+                if was_folded:
                     self._folded_clusters.remove(row_info.cluster.name)
                 else:
                     self._folded_clusters.add(row_info.cluster.name)
+                logger.debug(
+                    f"Cluster {row_info.cluster.name} {'unfolded' if was_folded else 'folded'}"
+                )
                 self._update_table()
 
         elif row_info.row_type == RowType.SERVICE:
@@ -386,10 +393,14 @@ class TreeView(Static):
             service_key = self._get_service_key(
                 row_info.cluster.name, row_info.service.name
             )
-            if service_key in self._folded_services:
+            was_folded = service_key in self._folded_services
+            if was_folded:
                 self._folded_services.remove(service_key)
             else:
                 self._folded_services.add(service_key)
+            logger.debug(
+                f"Service {row_info.service.name} {'unfolded' if was_folded else 'folded'}"
+            )
             self._update_table()
 
     def action_next_sibling(self) -> None:

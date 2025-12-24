@@ -1,9 +1,13 @@
 """AWS client initialization and configuration."""
 
+import logging
+
 import boto3
 from botocore.config import Config as BotoConfig
 
 from grapes.config import ClusterConfig
+
+logger = logging.getLogger(__name__)
 
 
 def create_ecs_client(cluster_config: ClusterConfig):

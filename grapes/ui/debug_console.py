@@ -73,10 +73,6 @@ class DebugConsole(Static):
             message: Formatted log message
             level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         """
-        # Only write logs when the console is visible to avoid UI glitches
-        if not self.is_visible:
-            return
-
         log = self.query_one("#debug-log", RichLog)
 
         # Color-code by level

@@ -90,12 +90,15 @@ class ECSFetcher:
         Returns:
             List of Cluster objects with basic info (no services/tasks)
         """
+        logger.info("Starting to list ECS clusters")
         self._report_progress("Listing clusters...")
         cluster_arns = self._list_cluster_arns()
 
         if not cluster_arns:
+            logger.info("No clusters found")
             return []
 
+        logger.debug(f"Found {len(cluster_arns)} cluster ARNs")
         self._report_progress(
             f"Found {len(cluster_arns)} clusters, fetching details..."
         )
@@ -159,6 +162,8 @@ class ECSFetcher:
         cluster_name = self.clients.cluster_name
         region = self.clients.region
 
+        logger.info(f"Fetching complete cluster state for: {cluster_name}")
+
         # Get cluster info
         self._report_progress(f"Describing cluster: {cluster_name}")
         cluster_info = self._describe_cluster(cluster_name)
@@ -166,6 +171,7 @@ class ECSFetcher:
         # Get all services
         self._report_progress("Listing services...")
         service_arns = self._list_services(cluster_name)
+        logger.debug(f"Found {len(service_arns)} service ARNs")
         self._report_progress(
             f"Found {len(service_arns)} services, fetching details..."
         )
@@ -174,6 +180,7 @@ class ECSFetcher:
         # Get all tasks for the cluster
         self._report_progress("Listing tasks...")
         task_arns = self._list_tasks(cluster_name)
+        logger.debug(f"Found {len(task_arns)} task ARNs")
         self._report_progress(f"Found {len(task_arns)} tasks, fetching details...")
         tasks_by_service = self._describe_tasks_batched(cluster_name, task_arns)
 

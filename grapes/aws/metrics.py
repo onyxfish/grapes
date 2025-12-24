@@ -44,11 +44,14 @@ class MetricsFetcher:
         self._progress_callback = callback
 
     def check_container_insights(self) -> bool:
-        """Check if Container Insights is enabled for the cluster.
+        """Check if Container Insights is enabled for cluster.
 
         Returns:
             True if Container Insights is enabled and has data
         """
+        logger.debug(
+            f"Checking Container Insights for cluster: {self.clients.cluster_name}"
+        )
         self._report_progress("Checking Container Insights status...")
         try:
             response = self.clients.cloudwatch.get_metric_statistics(
@@ -64,6 +67,7 @@ class MetricsFetcher:
             )
             # If we get datapoints, Container Insights is enabled
             self._insights_enabled = len(response.get("Datapoints", [])) > 0
+            logger.info(f"Container Insights enabled: {self._insights_enabled}")
             return self._insights_enabled
         except Exception as e:
             logger.warning(f"Failed to check Container Insights: {e}")
@@ -78,13 +82,14 @@ class MetricsFetcher:
         return self._insights_enabled
 
     def fetch_metrics_for_cluster(self, cluster: Cluster) -> None:
-        """Fetch and attach metrics to all services and containers in the cluster.
+        """Fetch and attach metrics to all services and containers in cluster.
 
         Modifies services and containers in-place to add cpu_used and memory_used.
 
         Args:
             cluster: Cluster object with services and tasks populated
         """
+        logger.info(f"Fetching metrics for cluster: {cluster.name}")
         # Always fetch service-level metrics (doesn't require Container Insights)
         self._fetch_service_metrics(cluster)
 
@@ -103,8 +108,10 @@ class MetricsFetcher:
             cluster: Cluster object with services populated
         """
         if not cluster.services:
+            logger.debug("No services to fetch metrics for")
             return
 
+        logger.debug(f"Fetching service metrics for {len(cluster.services)} services")
         self._report_progress(
             f"Fetching metrics for {len(cluster.services)} services..."
         )
@@ -115,10 +122,12 @@ class MetricsFetcher:
         )
 
         if not metric_queries:
+            logger.debug("No metric queries built for services")
             return
 
         # Fetch metrics in batches
         all_results = self._fetch_metrics_batched(metric_queries)
+        logger.debug(f"Received {len(all_results)} service metric results")
 
         # Attach results to services
         self._attach_metrics_to_services(cluster.services, all_results)
