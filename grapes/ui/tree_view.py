@@ -74,7 +74,7 @@ class TreeView(Static):
 
     def compose(self) -> ComposeResult:
         """Compose the tree view layout."""
-        yield Static("[bold]ECS Clusters[/bold]", id="tree-title")
+        yield Static("[bold]grapes[/bold]", id="tree-title")
         yield DataTable(id="tree-table")
 
     def on_mount(self) -> None:
