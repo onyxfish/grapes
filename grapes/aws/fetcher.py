@@ -46,10 +46,6 @@ class TaskDefinitionCache:
         """Cache a task definition."""
         self._cache[task_def_arn] = (data, datetime.now(timezone.utc))
 
-    def clear(self) -> None:
-        """Clear the cache."""
-        self._cache.clear()
-
 
 class ECSFetcher:
     """Fetches ECS cluster data with batching and caching."""
@@ -79,10 +75,6 @@ class ECSFetcher:
         """Report progress if callback is set."""
         if self._progress_callback:
             self._progress_callback(message)
-
-    def set_progress_callback(self, callback: ProgressCallback | None) -> None:
-        """Set or clear the progress callback."""
-        self._progress_callback = callback
 
     def list_clusters(self) -> list[Cluster]:
         """List all ECS clusters with basic information.

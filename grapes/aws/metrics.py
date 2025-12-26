@@ -1,6 +1,7 @@
 """CloudWatch Container Insights metrics fetching."""
 
 import logging
+import traceback
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -38,10 +39,6 @@ class MetricsFetcher:
         """Report progress if callback is set."""
         if self._progress_callback:
             self._progress_callback(message)
-
-    def set_progress_callback(self, callback: ProgressCallback | None) -> None:
-        """Set or clear the progress callback."""
-        self._progress_callback = callback
 
     def check_container_insights(self) -> bool:
         """Check if Container Insights is enabled for cluster.
@@ -631,119 +628,8 @@ class MetricsFetcher:
 
         except Exception as e:
             logger.error(f"Failed to fetch service metrics history: {e}")
-            import traceback
-
             logger.debug(traceback.format_exc())
             return [], [], [], (0, 0, 0), (0, 0, 0)
-
-        now = datetime.now(timezone.utc)
-        start_time = now - timedelta(minutes=minutes)
-
-        logger.info(
-            f"Fetching service metrics history for {service_name} "
-            f"from {start_time} to {now}"
-        )
-
-        # Build queries for CPU and memory using AWS/ECS namespace
-        cpu_id = sanitize_metric_id(f"svc_hist_cpu_{service_name}")
-        mem_id = sanitize_metric_id(f"svc_hist_mem_{service_name}")
-
-        queries = [
-            {
-                "Id": cpu_id,
-                "MetricStat": {
-                    "Metric": {
-                        "Namespace": "AWS/ECS",
-                        "MetricName": "CPUUtilization",
-                        "Dimensions": [
-                            {"Name": "ClusterName", "Value": cluster_name},
-                            {"Name": "ServiceName", "Value": service_name},
-                        ],
-                    },
-                    "Period": 60,  # 1-minute resolution
-                    "Stat": "Average",
-                },
-                "ReturnData": True,
-            },
-            {
-                "Id": mem_id,
-                "MetricStat": {
-                    "Metric": {
-                        "Namespace": "AWS/ECS",
-                        "MetricName": "MemoryUtilization",
-                        "Dimensions": [
-                            {"Name": "ClusterName", "Value": cluster_name},
-                            {"Name": "ServiceName", "Value": service_name},
-                        ],
-                    },
-                    "Period": 60,
-                    "Stat": "Average",
-                },
-                "ReturnData": True,
-            },
-        ]
-
-        try:
-            response = self.clients.cloudwatch.get_metric_data(
-                MetricDataQueries=queries,
-                StartTime=start_time,
-                EndTime=now,
-            )
-
-            # Parse results - CloudWatch returns newest first by default
-            cpu_data: dict[datetime, float] = {}
-            mem_data: dict[datetime, float] = {}
-
-            for result in response.get("MetricDataResults", []):
-                metric_id = result.get("Id", "")
-                values = result.get("Values", [])
-                times = result.get("Timestamps", [])
-
-                logger.debug(
-                    f"Service metric {metric_id}: {len(values)} values, "
-                    f"{len(times)} timestamps"
-                )
-
-                if metric_id == cpu_id:
-                    for ts, val in zip(times, values):
-                        cpu_data[ts] = val
-                elif metric_id == mem_id:
-                    for ts, val in zip(times, values):
-                        mem_data[ts] = val
-
-            # Merge timestamps and sort chronologically (oldest first)
-            all_timestamps = sorted(set(cpu_data.keys()) | set(mem_data.keys()))
-
-            if not all_timestamps:
-                logger.warning(f"No metrics data found for service {service_name}")
-                return [], [], []
-
-            # Build aligned lists
-            cpu_values: list[float] = []
-            mem_values: list[float] = []
-            timestamps: list[datetime] = []
-
-            for ts in all_timestamps:
-                cpu_val = cpu_data.get(ts, 0.0)
-                mem_val = mem_data.get(ts, 0.0)
-
-                timestamps.append(ts)
-                cpu_values.append(cpu_val)
-                mem_values.append(mem_val)
-
-            logger.info(
-                f"Fetched {len(cpu_values)} historical data points for "
-                f"service {service_name}"
-            )
-
-            return cpu_values, mem_values, timestamps
-
-        except Exception as e:
-            logger.error(f"Failed to fetch service metrics history: {e}")
-            import traceback
-
-            logger.debug(traceback.format_exc())
-            return [], [], []
 
     def fetch_container_metrics_history(
         self,
@@ -1001,122 +887,5 @@ class MetricsFetcher:
 
         except Exception as e:
             logger.error(f"Failed to fetch container metrics history: {e}")
-            import traceback
-
             logger.debug(traceback.format_exc())
             return [], [], [], (0, 0, 0), (0, 0, 0)
-
-        now = datetime.now(timezone.utc)
-        start_time = now - timedelta(minutes=minutes)
-
-        logger.info(
-            f"Fetching metrics history for {task.short_id}/{container.name} "
-            f"from {start_time} to {now}"
-        )
-
-        # Build queries for CPU and memory
-        cpu_id = sanitize_metric_id(f"hist_cpu_{task.short_id}_{container.name}")
-        mem_id = sanitize_metric_id(f"hist_mem_{task.short_id}_{container.name}")
-
-        queries = [
-            {
-                "Id": cpu_id,
-                "MetricStat": {
-                    "Metric": {
-                        "Namespace": "ECS/ContainerInsights",
-                        "MetricName": "CpuUtilized",
-                        "Dimensions": [
-                            {"Name": "ClusterName", "Value": cluster_name},
-                            {"Name": "TaskId", "Value": task.id},
-                            {"Name": "ContainerName", "Value": container.name},
-                        ],
-                    },
-                    "Period": 60,  # 1-minute resolution
-                    "Stat": "Average",
-                },
-                "ReturnData": True,
-            },
-            {
-                "Id": mem_id,
-                "MetricStat": {
-                    "Metric": {
-                        "Namespace": "ECS/ContainerInsights",
-                        "MetricName": "MemoryUtilized",
-                        "Dimensions": [
-                            {"Name": "ClusterName", "Value": cluster_name},
-                            {"Name": "TaskId", "Value": task.id},
-                            {"Name": "ContainerName", "Value": container.name},
-                        ],
-                    },
-                    "Period": 60,
-                    "Stat": "Average",
-                },
-                "ReturnData": True,
-            },
-        ]
-
-        try:
-            response = self.clients.cloudwatch.get_metric_data(
-                MetricDataQueries=queries,
-                StartTime=start_time,
-                EndTime=now,
-            )
-
-            # Parse results - CloudWatch returns newest first by default
-            cpu_data: dict[datetime, float] = {}
-            mem_data: dict[datetime, float] = {}
-
-            for result in response.get("MetricDataResults", []):
-                metric_id = result.get("Id", "")
-                values = result.get("Values", [])
-                times = result.get("Timestamps", [])
-
-                logger.debug(
-                    f"Metric {metric_id}: {len(values)} values, {len(times)} timestamps"
-                )
-
-                if metric_id == cpu_id:
-                    for ts, val in zip(times, values):
-                        cpu_data[ts] = val
-                elif metric_id == mem_id:
-                    for ts, val in zip(times, values):
-                        mem_data[ts] = val
-
-            # Merge timestamps and sort chronologically (oldest first)
-            all_timestamps = sorted(set(cpu_data.keys()) | set(mem_data.keys()))
-
-            if not all_timestamps:
-                logger.warning(
-                    f"No metrics data found for {task.short_id}/{container.name}. "
-                    "Container Insights may not be enabled."
-                )
-                return [], [], []
-
-            # Build aligned lists
-            cpu_values: list[float] = []
-            mem_values: list[float] = []
-            timestamps: list[datetime] = []
-
-            for ts in all_timestamps:
-                # Only include timestamps where we have both metrics
-                # or use 0 as placeholder if one is missing
-                cpu_val = cpu_data.get(ts, 0.0)
-                mem_val = mem_data.get(ts, 0.0)
-
-                timestamps.append(ts)
-                cpu_values.append(cpu_val)
-                mem_values.append(mem_val)
-
-            logger.info(
-                f"Fetched {len(cpu_values)} historical data points for "
-                f"{task.short_id}/{container.name}"
-            )
-
-            return cpu_values, mem_values, timestamps
-
-        except Exception as e:
-            logger.error(f"Failed to fetch container metrics history: {e}")
-            import traceback
-
-            logger.debug(traceback.format_exc())
-            return [], [], []

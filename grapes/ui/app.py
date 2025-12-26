@@ -23,6 +23,7 @@ from grapes.ui.console_link import (
     build_container_url,
     build_service_url,
     build_task_url,
+    copy_to_clipboard,
     open_in_browser,
 )
 from grapes.ui.debug_console import DebugConsole, TextualLogHandler
@@ -68,8 +69,10 @@ class ECSMonitorApp(App):
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
         Binding("o", "open_console", "Open in AWS Console"),
+        Binding("c", "copy_url", "Copy URL"),
         Binding("v", "toggle_metrics_panel", "Metrics"),
         Binding("d", "toggle_debug_console", "Debug"),
+        Binding("escape", "close_panels", "Close Panels", show=False),
     ]
 
     # Reactive state
@@ -116,14 +119,19 @@ class ECSMonitorApp(App):
         # Track if a specific cluster was configured
         self._configured_cluster = config.cluster.name
 
+        # Track metrics panel state
+        self._metrics_service = None
+        self._metrics_task = None
+        self._metrics_container = None
+
     def _on_progress(self, message: str) -> None:
         """Handle progress updates from fetchers."""
         if self.loading:
             try:
                 loading_screen = self.query_one("#loading", LoadingScreen)
                 self.call_from_thread(loading_screen.update_status, message)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to update loading screen: {e}")
         logger.debug(f"Progress: {message}")
 
     def compose(self) -> ComposeResult:
@@ -157,8 +165,8 @@ class ECSMonitorApp(App):
         try:
             tree_view = self.query_one("#tree-view", TreeView)
             tree_view.refresh_countdown = self.config.refresh.interval
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to set initial countdown: {e}")
 
         # Start initial data fetch
         self._fetch_cluster_list()
@@ -183,8 +191,8 @@ class ECSMonitorApp(App):
         try:
             tree_view = self.query_one("#tree-view", TreeView)
             tree_view.refresh_countdown = self.config.refresh.interval
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to reset countdown: {e}")
 
     def _update_countdown(self) -> None:
         """Update the refresh countdown timer."""
@@ -194,8 +202,8 @@ class ECSMonitorApp(App):
             tree_view = self.query_one("#tree-view", TreeView)
             if tree_view.refresh_countdown > 0:
                 tree_view.refresh_countdown -= 1
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to update countdown: {e}")
 
     def _refresh_loaded_clusters(self) -> None:
         """Refresh data for all loaded clusters."""
@@ -296,8 +304,8 @@ class ECSMonitorApp(App):
                 try:
                     tree_view = self.query_one("#tree-view", TreeView)
                     tree_view.clusters = self.clusters
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to update tree view: {e}")
 
                 # Auto-load configured cluster or single cluster on initial load
                 if is_initial_load:
@@ -312,8 +320,8 @@ class ECSMonitorApp(App):
                 try:
                     loading = self.query_one("#loading", LoadingScreen)
                     loading.update_status(f"Error: {event.worker.error}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to update loading status: {e}")
             self.notify(
                 f"Error loading clusters: {event.worker.error}", severity="error"
             )
@@ -327,8 +335,8 @@ class ECSMonitorApp(App):
                 try:
                     tree_view = self.query_one("#tree-view", TreeView)
                     tree_view.update_cluster_data(result)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to update tree view with cluster data: {e}")
 
         elif event.state == WorkerState.ERROR:
             logger.error(f"Cluster data fetch failed: {event.worker.error}")
@@ -355,7 +363,8 @@ class ECSMonitorApp(App):
         try:
             tree_view = self.query_one("#tree-view", TreeView)
             cluster, service, task, container = tree_view.get_selected_item()
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to get selected item: {e}")
             return
 
         if cluster is None:
@@ -379,6 +388,46 @@ class ECSMonitorApp(App):
                 self.notify("Opening in browser...")
             else:
                 self.notify(f"Failed to open browser. URL: {url}", severity="warning")
+
+    def action_copy_url(self) -> None:
+        """Copy the AWS Console URL to clipboard."""
+        logger.info("Copy URL requested")
+        try:
+            tree_view = self.query_one("#tree-view", TreeView)
+            cluster, service, task, container = tree_view.get_selected_item()
+        except Exception as e:
+            logger.debug(f"Failed to get selected item: {e}")
+            return
+
+        if cluster is None:
+            return
+
+        region = self.config.cluster.region
+        url = None
+
+        if container is not None and task is not None:
+            url = build_container_url(cluster.name, task.id, region)
+        elif task is not None:
+            url = build_task_url(cluster.name, task.id, region)
+        elif service is not None:
+            url = build_service_url(cluster.name, service.name, region)
+        else:
+            url = build_cluster_url(cluster.name, region)
+
+        if url:
+            if copy_to_clipboard(url):
+                self.notify("URL copied to clipboard")
+            else:
+                self.notify(
+                    "Failed to copy URL (pyperclip not available)", severity="warning"
+                )
+
+    def action_close_panels(self) -> None:
+        """Close any open panels (debug console or metrics panel)."""
+        if self.debug_console_visible:
+            self.debug_console_visible = False
+        if self.metrics_panel_visible:
+            self.metrics_panel_visible = False
 
     def action_toggle_debug_console(self) -> None:
         """Toggle the debug console visibility."""
@@ -424,8 +473,8 @@ class ECSMonitorApp(App):
             container = task.containers[0]
 
         # Check if the same service/task is selected as currently displayed
-        current_service = getattr(self, "_metrics_service", None)
-        current_task = getattr(self, "_metrics_task", None)
+        current_service = self._metrics_service
+        current_task = self._metrics_task
 
         # Check for exact match on what's currently displayed
         exact_match = False

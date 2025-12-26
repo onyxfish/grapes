@@ -45,7 +45,8 @@ class TextualLogHandler(logging.Handler):
                 self.console.write_log, message, record.levelname
             )
         except Exception:
-            # Silently ignore errors - don't call handleError as it prints to stderr
+            # Silently ignore errors in log handler - can't log failures to log
+            # (would cause infinite recursion). Don't use handleError as it writes to stderr.
             pass
 
 
@@ -60,11 +61,6 @@ class DebugConsole(Static):
         """Set up the console when mounted."""
         log = self.query_one("#debug-log", RichLog)
         log.can_focus = False  # Don't steal focus from main UI
-
-    @property
-    def is_visible(self) -> bool:
-        """Check if the debug console is currently visible."""
-        return self.has_class("visible")
 
     def write_log(self, message: str, level: str) -> None:
         """Write a log message to the console.
@@ -86,8 +82,3 @@ class DebugConsole(Static):
             styled_message = message
 
         log.write(styled_message)
-
-    def clear(self) -> None:
-        """Clear the console."""
-        log = self.query_one("#debug-log", RichLog)
-        log.clear()

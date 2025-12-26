@@ -110,8 +110,8 @@ class TreeView(Static):
                 title.update(f"[bold]grapes [{countdown}s][/bold]")
             else:
                 title.update("[bold]grapes[/bold]")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to update title: {e}")
 
     def update_cluster_data(self, cluster: Cluster) -> None:
         """Update the data for a specific cluster (services/tasks loaded).
@@ -133,7 +133,8 @@ class TreeView(Static):
 
         try:
             table = self.query_one("#tree-table", DataTable)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Table not ready: {e}")
             return
 
         # Save cursor position
@@ -336,26 +337,11 @@ class TreeView(Static):
 
     def _style_health_text(self, health: HealthStatus, text: str) -> str:
         """Style health status text with color."""
-        if health == HealthStatus.HEALTHY:
-            return f"[green]{text}[/green]"
-        elif health == HealthStatus.UNHEALTHY:
-            return f"[red]{text}[/red]"
-        elif health == HealthStatus.WARNING:
-            return f"[yellow]{text}[/yellow]"
-        else:
-            return f"[dim]{text}[/dim]"
+        return f"[{health.color}]{text}[/{health.color}]"
 
     def _style_health_symbol(self, health: HealthStatus) -> str:
         """Style health status symbol with color."""
-        symbol = health.symbol
-        if health == HealthStatus.HEALTHY:
-            return f"[green]{symbol}[/green]"
-        elif health == HealthStatus.UNHEALTHY:
-            return f"[red]{symbol}[/red]"
-        elif health == HealthStatus.WARNING:
-            return f"[yellow]{symbol}[/yellow]"
-        else:
-            return f"[dim]{symbol}[/dim]"
+        return f"[{health.color}]{health.symbol}[/{health.color}]"
 
     def _style_task_status(self, status: str) -> str:
         """Style task status with color."""
@@ -372,7 +358,8 @@ class TreeView(Static):
         """Handle Enter key - toggle fold or load cluster data."""
         try:
             table = self.query_one("#tree-table", DataTable)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Table not ready: {e}")
             return
 
         if table.cursor_row is None or table.cursor_row >= len(self._row_map):
@@ -429,7 +416,8 @@ class TreeView(Static):
         """
         try:
             table = self.query_one("#tree-table", DataTable)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Table not ready: {e}")
             return
 
         if table.cursor_row is None or not self._row_map:
@@ -473,7 +461,8 @@ class TreeView(Static):
         """
         try:
             table = self.query_one("#tree-table", DataTable)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Table not ready: {e}")
             return None, None, None, None
 
         if table.cursor_row is None or table.cursor_row >= len(self._row_map):
@@ -490,7 +479,8 @@ class TreeView(Static):
         """
         try:
             table = self.query_one("#tree-table", DataTable)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Table not ready: {e}")
             return None
 
         if table.cursor_row is None or table.cursor_row >= len(self._row_map):

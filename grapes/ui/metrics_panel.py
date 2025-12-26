@@ -149,16 +149,6 @@ class MetricsPanel(Static):
         self._update_display()
         self._update_charts()
 
-    def clear_data(self) -> None:
-        """Clear all metrics data."""
-        self.selected_service = None
-        self.selected_task = None
-        self.selected_container = None
-        self.cpu_history = []
-        self.memory_history = []
-        self.timestamps = []
-        self._update_display()
-
     def _update_display(self) -> None:
         """Update the title and status display."""
         if not self._mounted:
@@ -167,7 +157,8 @@ class MetricsPanel(Static):
         try:
             title = self.query_one("#metrics-title", Static)
             status = self.query_one("#metrics-status", Static)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Metrics panel widgets not ready: {e}")
             return
 
         # Determine what we're displaying
@@ -213,7 +204,8 @@ class MetricsPanel(Static):
         try:
             cpu_container = self.query_one("#cpu-chart-container", Static)
             mem_container = self.query_one("#mem-chart-container", Static)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Chart containers not ready: {e}")
             return
 
         # Calculate available dimensions for charts

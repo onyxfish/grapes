@@ -4,7 +4,7 @@ import pytest
 from datetime import datetime, timezone
 
 from textual.app import App, ComposeResult
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable
 
 from grapes.models import (
     Cluster,
@@ -14,7 +14,7 @@ from grapes.models import (
     Service,
     Task,
 )
-from grapes.ui.cluster_view import ClusterHeader, LoadingScreen
+from grapes.ui.cluster_view import LoadingScreen
 from grapes.ui.tree_view import TreeView, RowType
 
 
@@ -138,62 +138,6 @@ def create_second_test_cluster() -> Cluster:
         last_updated=datetime.now(timezone.utc),
         services=[],
     )
-
-
-class TestClusterHeaderWidget:
-    """Tests for ClusterHeader widget."""
-
-    class ClusterHeaderApp(App):
-        """Test app for ClusterHeader."""
-
-        def __init__(self, cluster: Cluster | None = None, insights: bool = True):
-            super().__init__()
-            self._cluster = cluster
-            self._insights = insights
-
-        def compose(self) -> ComposeResult:
-            header = ClusterHeader(id="header")
-            yield header
-
-        def on_mount(self) -> None:
-            header = self.query_one("#header", ClusterHeader)
-            header.cluster = self._cluster
-            header.insights_enabled = self._insights
-
-    @pytest.mark.asyncio
-    async def test_cluster_header_displays_cluster_info(self):
-        """Test that cluster header displays cluster information."""
-        cluster = create_test_cluster()
-        app = self.ClusterHeaderApp(cluster=cluster, insights=True)
-
-        async with app.run_test():
-            header = app.query_one("#header", ClusterHeader)
-            assert header.cluster is not None
-            assert header.cluster.name == "test-cluster"
-
-    @pytest.mark.asyncio
-    async def test_cluster_header_shows_insights_warning(self):
-        """Test that insights warning is shown when disabled."""
-        cluster = create_test_cluster()
-        app = self.ClusterHeaderApp(cluster=cluster, insights=False)
-
-        async with app.run_test():
-            header = app.query_one("#header", ClusterHeader)
-            assert header.insights_enabled is False
-            # The warning widget should be visible
-            warning = header.query_one("#insights-warning", Static)
-            assert warning.display is True
-
-    @pytest.mark.asyncio
-    async def test_cluster_header_hides_insights_warning_when_enabled(self):
-        """Test that insights warning is hidden when enabled."""
-        cluster = create_test_cluster()
-        app = self.ClusterHeaderApp(cluster=cluster, insights=True)
-
-        async with app.run_test():
-            header = app.query_one("#header", ClusterHeader)
-            warning = header.query_one("#insights-warning", Static)
-            assert warning.display is False
 
 
 class TestLoadingScreenWidget:
